@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>제주 쌀/팥 자동 분류 앱</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- SheetJS for Excel processing -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap');
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif; background-color: #eef2f6; color: #1e293b; }
+        .app-container { max-width: 480px; margin: 0 auto; background-color: #f8fafc; min-height: 100vh; display: flex; flex-direction: column; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05); position: relative; }
+        .content-area { flex: 1; overflow-y: auto; padding-bottom: 110px; }
+        
+        /* 동글동글한 플로팅 하단 네비게이션 */
+        .bottom-nav-container { position: fixed; bottom: 16px; width: 100%; max-width: 480px; padding: 0 16px; z-index: 40; pointer-events: none; }
+        .bottom-nav { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.6); border-radius: 9999px; display: flex; justify-content: space-around; padding: 8px 12px; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08); pointer-events: auto; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: #94a3b8; cursor: pointer; flex: 1; padding: 6px 0; border-radius: 9999px; transition: all 0.2s ease; -webkit-tap-highlight-color: transparent;}
+        .nav-item.active { color: #2563eb; font-weight: 700; background-color: #eff6ff; }
+        .nav-item i { margin-bottom: 2px; }
+        
+        .file-input-wrapper { position: relative; overflow: hidden; display: block; width: 100%; cursor: pointer; }
+        .file-input-wrapper input[type=file] { font-size: 100px; position: absolute; left: 0; top: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-6px); }
+        }
+        .animate-float { animation: float 3s ease-in-out infinite; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // 심플하고 모던한 쌀포대 그래픽
+        const RiceChar = ({ className = "w-16 h-16" }) => (
+            <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+                <ellipse cx="50" cy="92" rx="28" ry="4" fill="#000000" fillOpacity="0.06"/>
+                {/* 포대 상단 주름 */}
+                <path d="M35 24 C30 14 22 15 26 9 C32 4 42 12 50 12 C58 12 68 4 74 9 C78 15 70 14 65 24 Z" fill="#FDE68A" stroke="#D97706" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
+                {/* 포대 몸통 */}
+                <path d="M31 23 C18 35 16 62 20 80 C22 89 34 91 50 91 C66 91 78 89 80 80 C84 62 82 35 69 23 Z" fill="#FFFBEB" stroke="#D97706" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
+                {/* 포대 묶음 끈 */}
+                <path d="M29 24 C40 28 60 28 71 24" stroke="#B45309" strokeWidth="4.5" strokeLinecap="round"/>
+                {/* 중앙 라벨 */}
+                <rect x="33" y="42" width="34" height="34" rx="12" fill="#FDE68A" stroke="#F59E0B" strokeWidth="2"/>
+                <text x="50" y="65" fontSize="20" fontWeight="900" fill="#B45309" textAnchor="middle" style={{fontFamily: 'Pretendard, sans-serif'}}>쌀</text>
+            </svg>
+        );
+
+        // 심플하고 모던한 팥포대 그래픽
+        const BeanChar = ({ className = "w-16 h-16" }) => (
+            <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+                <ellipse cx="50" cy="92" rx="28" ry="4" fill="#000000" fillOpacity="0.06"/>
+                {/* 포대 상단 주름 */}
+                <path d="M35 24 C30 14 22 15 26 9 C32 4 42 12 50 12 C58 12 68 4 74 9 C78 15 70 14 65 24 Z" fill="#FECDD3" stroke="#9F1239" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
+                {/* 포대 몸통 */}
+                <path d="M31 23 C18 35 16 62 20 80 C22 89 34 91 50 91 C66 91 78 89 80 80 C84 62 82 35 69 23 Z" fill="#FFF1F2" stroke="#9F1239" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
+                {/* 포대 묶음 끈 */}
+                <path d="M29 24 C40 28 60 28 71 24" stroke="#881337" strokeWidth="4.5" strokeLinecap="round"/>
+                {/* 중앙 라벨 */}
+                <rect x="33" y="42" width="34" height="34" rx="12" fill="#FECDD3" stroke="#F43F5E" strokeWidth="2"/>
+                <text x="50" y="65" fontSize="20" fontWeight="900" fill="#9F1239" textAnchor="middle" style={{fontFamily: 'Pretendard, sans-serif'}}>팥</text>
+            </svg>
+        );
+
+        const initialRegions = {
+            "건입떡집": "제주시", "낙원떡집(동문)": "제주시", "도남떡방앗간": "제주시", "도남오거리": "제주시", 
+            "동백": "제주시", "떡마을": "제주시", "떡방동행": "제주시", "떡하니": "제주시", "명당떡집": "제주시", 
+            "미듬민속떡집": "제주시", "섬나라": "제주시", "성도": "제주시", "세진": "제주시", "소망떡집": "제주시", 
+            "수빈": "제주시", "신선": "제주시", "용담": "제주시", "용문떡방": "제주시", "제주곱딱": "제주시", 
+            "제주떡고을": "제주시", "큰일": "제주시", "한일": "제주시", "한천식품": "제주시", "현대": "제주시",
+            "도두떡집": "신제주", "미도": "신제주", "반석떡집": "신제주", "부자떡집": "신제주", "수다뜰떡방": "신제주", 
+            "신광": "신제주", "오라떡집": "신제주", "한마음떡집": "신제주", "해맑은떡방": "신제주", "행복한떡방": "신제주",
+            "대성떡방앗간": "서쪽", "대정중앙떡방앗간": "서쪽", "대정하모떡집": "서쪽", "동귀떡방앗간": "서쪽", 
+            "떡보의하루": "서쪽", "저지떡방앗간": "서쪽", "제주기정떡": "서쪽", "풍년떡집": "서쪽", "한림우리떡": "서쪽",
+            "남문떡방앗간": "동쪽", "남원떡집": "동쪽", "두손떡집": "동쪽", "명성떡방앗간": "동쪽", "함덕우리떡집": "동쪽",
+            "오복떡방앗간": "서귀포", "주공방아간": "서귀포", "중문떡집": "서귀포"
+        };
+
+        const Icon = ({ name }) => {
+            const iconRef = useRef(null);
+            useEffect(() => {
+                if (iconRef.current) {
+                    lucide.createIcons({
+                        icons: { [name]: lucide.icons[name] },
+                        nameAttr: 'data-lucide',
+                        attrs: { class: "w-6 h-6" }
+                    });
+                }
+            }, [name]);
+            return <i ref={iconRef} data-lucide={name}></i>;
+        };
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('upload');
+            const [regions, setRegions] = useState(initialRegions);
+            const [history, setHistory] = useState([]);
+            const [currentProcess, setCurrentProcess] = useState(null);
+            
+            // Firebase States
+            const [user, setUser] = useState(null);
+            const [fbApi, setFbApi] = useState(null);
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+            // New Workflow States
+            const [pendingFile, setPendingFile] = useState(null);
+            const [uploadMonth, setUploadMonth] = useState(() => {
+                const now = new Date();
+                return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            });
+            const [uploadType, setUploadType] = useState('쌀');
+            const [uploadAmountMan, setUploadAmountMan] = useState(0); // 만원 단위 입력 상태
+            
+            // Filter States for Stats
+            const [filterMonth, setFilterMonth] = useState('ALL');
+            const [filterType, setFilterType] = useState('전체');
+            
+            // 내역조회(History) 전용 탭 상태 ('쌀' 또는 '팥')
+            const [historyTab, setHistoryTab] = useState('쌀');
+
+            // Edit Amount Modal State
+            const [editingItem, setEditingItem] = useState(null);
+            const [editAmountMan, setEditAmountMan] = useState(0);
+
+            // Toast state
+            const [toast, setToast] = useState(null); // { message, type: 'error' | 'success' }
+
+            const showToast = (message, type = 'success') => {
+                setToast({ message, type });
+                setTimeout(() => setToast(null), 3000);
+            };
+
+            // Firebase Initialization
+            useEffect(() => {
+                const initFirebase = async () => {
+                    try {
+                        const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
+                        const { getAuth, signInAnonymously, signInWithCustomToken } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js");
+                        const { getFirestore, doc, setDoc, onSnapshot, collection } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+
+                        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+                        const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+                        const auth = getAuth(app);
+                        const db = getFirestore(app);
+
+                        setFbApi({ db, doc, setDoc, onSnapshot, collection });
+
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                        setUser(auth.currentUser);
+                    } catch (err) {
+                        console.error("Firebase Init Error:", err);
+                    }
+                };
+                initFirebase();
+            }, []);
+
+            // Regions Sync
+            useEffect(() => {
+                if (!user || !fbApi) return;
+                const { db, collection, onSnapshot, doc, setDoc } = fbApi;
+                const regionsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'regions');
+                
+                const unsubscribe = onSnapshot(regionsRef, (snapshot) => {
+                    if (snapshot.empty) {
+                        Object.entries(initialRegions).forEach(([name, region]) => {
+                            setDoc(doc(regionsRef, name), { name, region });
+                        });
+                    } else {
+                        const loadedRegions = {};
+                        snapshot.forEach(docSnap => {
+                            loadedRegions[docSnap.id] = docSnap.data().region;
+                        });
+                        setRegions(loadedRegions);
+                    }
+                }, (error) => console.error("Regions sync error:", error));
+                return () => unsubscribe();
+            }, [user, fbApi]);
+
+            // History Sync
+            useEffect(() => {
+                if (!user || !fbApi) return;
+                const { db, collection, onSnapshot } = fbApi;
+                const historyRef = collection(db, 'artifacts', appId, 'users', user.uid, 'history');
+                
+                const unsubscribe = onSnapshot(historyRef, (snapshot) => {
+                    const loadedHistory = [];
+                    snapshot.forEach(docSnap => {
+                        loadedHistory.push({ ...docSnap.data(), id: docSnap.id });
+                    });
+                    loadedHistory.sort((a, b) => b.timestamp - a.timestamp);
+                    setHistory(loadedHistory);
+                }, (error) => console.error("History sync error:", error));
+                return () => unsubscribe();
+            }, [user, fbApi]);
+
+            useEffect(() => {
+                lucide.createIcons();
+            }, [activeTab, pendingFile, toast]);
+
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const bstr = evt.target.result;
+                    const wb = XLSX.read(bstr, { type: 'binary' });
+                    const wsname = wb.SheetNames[0];
+                    const ws = wb.Sheets[wsname];
+                    const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+                    
+                    // 파일 처리 전 정보 확인 팝업을 위해 Pending 상태로 둔다.
+                    setUploadAmountMan(0);
+                    setPendingFile({ data, name: file.name });
+                };
+                reader.readAsBinaryString(file);
+                e.target.value = null; 
+            };
+
+            const confirmUpload = () => {
+                if (!pendingFile) return;
+                const finalAmount = (Number(uploadAmountMan) || 0) * 10000;
+                processExcelData(pendingFile.data, pendingFile.name, uploadMonth, uploadType, finalAmount);
+                setPendingFile(null);
+            };
+
+            const processExcelData = (data, fileName, targetMonth, targetType, customAmount) => {
+                let headerIdx = -1;
+                let colMap = {};
+                for (let i = 0; i < data.length; i++) {
+                    const row = data[i];
+                    const rowStr = row.join(" ");
+                    if (rowStr.includes("상호") && rowStr.includes("대표자")) {
+                        headerIdx = i;
+                        row.forEach((val, idx) => {
+                            if (val) {
+                                const cleanVal = String(val).trim();
+                                if (cleanVal.includes("상호")) colMap.name = idx;
+                                if (cleanVal.includes("대표자")) colMap.rep = idx;
+                                if (cleanVal.includes("국산") && !cleanVal.includes("kg")) colMap.krSack = idx;
+                                if (cleanVal.includes("쌀수량") || (cleanVal.includes("국산") && cleanVal.includes("kg"))) colMap.krKg = idx;
+                                if (cleanVal.includes("25kg") || cleanVal.includes("할수량")) colMap.krSack = idx; // 팥 문서 대응
+                                if (cleanVal.includes("미국산") && !cleanVal.includes("kg")) colMap.usSack = idx;
+                            }
+                        });
+                        break;
+                    }
+                }
+
+                if (headerIdx === -1 || colMap.name === undefined) {
+                    showToast("지원하지 않는 엑셀 양식입니다. '상호', '대표자' 헤더를 찾을 수 없습니다.", "error");
+                    return;
+                }
+
+                const parsedList = [];
+                let unclassifiedCount = 0;
+                let totalSacks = 0;
+
+                for (let i = headerIdx + 1; i < data.length; i++) {
+                    const row = data[i];
+                    if (!row || row.length === 0) continue;
+                    
+                    const name = row[colMap.name];
+                    if (!name || String(name).trim() === '' || String(name).includes("합계") || String(name).includes("총합")) continue;
+
+                    const cleanName = String(name).trim();
+                    const rep = colMap.rep !== undefined ? row[colMap.rep] : "";
+                    const sacks = colMap.krSack !== undefined ? parseInt(row[colMap.krSack]) || 0 : 0;
+                    
+                    let region = regions[cleanName];
+                    if (!region) {
+                        region = "미분류";
+                        unclassifiedCount++;
+                    }
+
+                    totalSacks += sacks;
+
+                    parsedList.push({
+                        name: cleanName,
+                        rep: rep || "",
+                        sacks: sacks,
+                        region: region,
+                        originalRow: row
+                    });
+                }
+
+                const newHistory = {
+                    timestamp: Date.now(),
+                    date: new Date().toLocaleDateString('ko-KR'),
+                    fileName,
+                    month: targetMonth,
+                    type: targetType,
+                    totalCompanies: parsedList.length,
+                    unclassifiedCount,
+                    totalSacks,
+                    expectedAmount: customAmount, // 직접 입력받은 금액 (원 단위)
+                    data: parsedList
+                };
+
+                if (user && fbApi) {
+                    const { db, doc, setDoc } = fbApi;
+                    const docId = `history_${Date.now()}`;
+                    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', docId);
+                    setDoc(docRef, newHistory).then(() => {
+                        setCurrentProcess({...newHistory, id: docId});
+                        setHistoryTab(targetType); // 업로드한 품목으로 내역 탭 자동 전환 세팅
+                        if (unclassifiedCount > 0) {
+                            showToast(`신규 업체 ${unclassifiedCount}곳이 미분류되었습니다. 하차지 탭에서 확인하세요.`, "error");
+                        } else {
+                            showToast("분류가 성공적으로 완료되었습니다.");
+                        }
+                    }).catch(e => {
+                        console.error("Upload save error:", e);
+                        showToast("저장 중 오류가 발생했습니다.", "error");
+                    });
+                } else {
+                    showToast("클라우드 연결 오류로 저장되지 않았습니다.", "error");
+                }
+            };
+
+            const saveEditedAmount = async () => {
+                if (!editingItem || !user || !fbApi) return;
+                const newAmount = (Number(editAmountMan) || 0) * 10000;
+                try {
+                    const { db, doc, setDoc } = fbApi;
+                    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', editingItem.id);
+                    const updatedItem = { ...editingItem, expectedAmount: newAmount };
+                    await setDoc(docRef, updatedItem);
+                    if (currentProcess && currentProcess.id === editingItem.id) {
+                        setCurrentProcess(updatedItem);
+                    }
+                    setEditingItem(null);
+                    showToast("정산 금액이 수정되었습니다.");
+                } catch (err) {
+                    console.error("Update amount error:", err);
+                    showToast("금액 수정 중 오류가 발생했습니다.", "error");
+                }
+            };
+
+            const downloadExcel = (processData) => {
+                const wb = XLSX.utils.book_new();
+                
+                const byRegion = {
+                    "제주시": [], "신제주": [], "서쪽": [], "동쪽": [], "서귀포": [], "미분류": []
+                };
+                processData.data.forEach(item => {
+                    byRegion[item.region].push(item);
+                });
+
+                const headers = ["상호", "대표자", "주소", "전화번호", "국산(포)", "미국산(포)"];
+
+                const createRegionBlock = (regionName, dataList) => {
+                    if (dataList.length === 0) return [];
+                    const block = [];
+                    block.push([regionName]); 
+                    block.push(headers);
+                    let sum = 0;
+                    dataList.forEach(item => {
+                        block.push([item.name, item.rep, "", "", item.sacks > 0 ? item.sacks : "", ""]);
+                        sum += item.sacks;
+                    });
+                    block.push(["합계", "", "", "", sum, ""]);
+                    block.push([]); 
+                    return block;
+                };
+
+                // 시트 1
+                let sheet1Data = [];
+                sheet1Data = sheet1Data.concat(createRegionBlock("제주시", byRegion["제주시"]));
+                sheet1Data = sheet1Data.concat(createRegionBlock("신제주", byRegion["신제주"]));
+                sheet1Data = sheet1Data.concat(createRegionBlock("미분류(지역 미확인 업체)", byRegion["미분류"]));
+                
+                const ws1 = XLSX.utils.aoa_to_sheet(sheet1Data);
+                XLSX.utils.book_append_sheet(wb, ws1, "최종_제주시,신제주");
+
+                // 시트 2
+                let sheet2Data = [];
+                sheet2Data = sheet2Data.concat(createRegionBlock("서쪽", byRegion["서쪽"]));
+                sheet2Data = sheet2Data.concat(createRegionBlock("동쪽", byRegion["동쪽"]));
+                sheet2Data = sheet2Data.concat(createRegionBlock("서귀포", byRegion["서귀포"]));
+
+                const ws2 = XLSX.utils.aoa_to_sheet(sheet2Data);
+                XLSX.utils.book_append_sheet(wb, ws2, "최종_서쪽,동쪽,서귀포");
+
+                // 시트 3
+                let sheet3Data = [["원본 팩스 기준 지역 매칭 결과"], headers.concat(["분류지역", "월", "품목"])];
+                processData.data.forEach(item => {
+                    sheet3Data.push([item.name, item.rep, "", "", item.sacks > 0 ? item.sacks : "", "", item.region, processData.month, processData.type]);
+                });
+                const ws3 = XLSX.utils.aoa_to_sheet(sheet3Data);
+                XLSX.utils.book_append_sheet(wb, ws3, "지역분류데이터");
+
+                XLSX.writeFile(wb, `배송분류완료_${processData.month}_${processData.type}.xlsx`);
+            };
+
+            const [newCompName, setNewCompName] = useState('');
+            const [newCompRegion, setNewCompRegion] = useState('제주시');
+
+            const addRegion = async (e) => {
+                e.preventDefault();
+                const name = newCompName.trim();
+                if (!name) return;
+                
+                if (user && fbApi) {
+                    try {
+                        const { db, doc, setDoc } = fbApi;
+                        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'regions', name);
+                        await setDoc(docRef, { name, region: newCompRegion });
+                        setNewCompName('');
+                        showToast(`'${name}' 하차지가 등록되었습니다.`);
+                    } catch (err) {
+                        console.error("Add region error:", err);
+                    }
+                } else {
+                    showToast("연결 오류로 등록할 수 없습니다.", "error");
+                }
+            };
+
+            // 통계 계산 로직 (필터 적용)
+            const filteredStats = useMemo(() => {
+                let filtered = history.filter(item => {
+                    const matchMonth = filterMonth === 'ALL' || item.month === filterMonth;
+                    const matchType = filterType === '전체' || item.type === filterType;
+                    return matchMonth && matchType;
+                });
+
+                const totalExpected = filtered.reduce((sum, item) => sum + item.expectedAmount, 0);
+                const totalSacks = filtered.reduce((sum, item) => sum + item.totalSacks, 0);
+
+                // 지역별 수량 집계
+                const regionCounts = { "제주시": 0, "신제주": 0, "서쪽": 0, "동쪽": 0, "서귀포": 0, "미분류": 0 };
+                filtered.forEach(item => {
+                    item.data.forEach(row => {
+                        if (regionCounts[row.region] !== undefined) {
+                            regionCounts[row.region] += row.sacks;
+                        } else {
+                            regionCounts["미분류"] += row.sacks;
+                        }
+                    });
+                });
+
+                return { docs: filtered, expected: totalExpected, sacks: totalSacks, regions: regionCounts };
+            }, [history, filterMonth, filterType]);
+
+            // 고유 월 추출을 위한 목록
+            const availableMonths = useMemo(() => {
+                const mSet = new Set();
+                history.forEach(item => {
+                    if (item.month) mSet.add(item.month);
+                });
+                return Array.from(mSet).sort().reverse();
+            }, [history]);
+
+            return (
+                <div className="app-container">
+                    {/* Toast Notification */}
+                    {toast && (
+                        <div className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-50 px-5 py-3.5 rounded-full shadow-xl text-sm font-semibold flex items-center w-auto max-w-[90%] whitespace-nowrap transition-all ${toast.type === 'error' ? 'bg-rose-500 text-white' : 'bg-slate-800 text-white'}`}>
+                            <Icon name={toast.type === 'error' ? 'alert-circle' : 'check-circle'} />
+                            <span className="ml-2">{toast.message}</span>
+                        </div>
+                    )}
+
+                    {/* Pending Upload Modal */}
+                    {pendingFile && (
+                        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-[32px] w-full max-w-sm overflow-hidden shadow-2xl p-2 animate-fade-in-up">
+                                <div className="p-5 text-center">
+                                    <h3 className="text-xl font-extrabold text-slate-800">문서 정보 입력</h3>
+                                    <p className="text-xs text-slate-400 mt-1">통계 관리를 위해 품목과 정산 금액을 설정해주세요</p>
+                                </div>
+                                <div className="px-5 pb-5 space-y-5">
+                                    <div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button type="button" onClick={() => setUploadType('쌀')} className={`py-4 px-2 rounded-[24px] font-bold text-sm border-2 transition-all flex flex-col items-center justify-center gap-2 ${uploadType === '쌀' ? 'bg-amber-50/80 text-amber-900 border-amber-400 shadow-sm scale-[1.02]' : 'bg-slate-50 text-slate-400 border-transparent hover:bg-slate-100 opacity-70'}`}>
+                                                <RiceChar className="w-14 h-14" />
+                                                <span>쌀 내역서</span>
+                                            </button>
+                                            <button type="button" onClick={() => setUploadType('팥')} className={`py-4 px-2 rounded-[24px] font-bold text-sm border-2 transition-all flex flex-col items-center justify-center gap-2 ${uploadType === '팥' ? 'bg-rose-50/80 text-rose-900 border-rose-400 shadow-sm scale-[1.02]' : 'bg-slate-50 text-slate-400 border-transparent hover:bg-slate-100 opacity-70'}`}>
+                                                <BeanChar className="w-14 h-14" />
+                                                <span>팥 내역서</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="bg-slate-50 p-4 rounded-[24px]">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="block text-xs font-bold text-slate-500">사장님께 받는 돈</label>
+                                            <span className="text-sm font-extrabold text-blue-600">{((Number(uploadAmountMan) || 0) * 10000).toLocaleString()} 원</span>
+                                        </div>
+                                        <div className="flex items-center space-x-2 mb-3 bg-white p-1.5 rounded-2xl border border-slate-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition">
+                                            <input type="number" step="10" placeholder="0" value={uploadAmountMan} onChange={(e) => setUploadAmountMan(e.target.value)} 
+                                                className="w-full px-3 py-1.5 text-right font-extrabold text-lg text-slate-800 outline-none bg-transparent"/>
+                                            <span className="text-sm font-bold text-slate-400 pr-3 shrink-0">만원</span>
+                                        </div>
+                                        <div className="grid grid-cols-4 gap-1.5">
+                                            <button type="button" onClick={() => setUploadAmountMan(prev => (Number(prev)||0) + 10)} className="bg-white hover:bg-slate-100 text-slate-600 border border-slate-200/80 text-xs font-bold py-2.5 rounded-xl transition active:scale-95 shadow-sm">+10만</button>
+                                            <button type="button" onClick={() => setUploadAmountMan(prev => (Number(prev)||0) + 50)} className="bg-white hover:bg-slate-100 text-slate-600 border border-slate-200/80 text-xs font-bold py-2.5 rounded-xl transition active:scale-95 shadow-sm">+50만</button>
+                                            <button type="button" onClick={() => setUploadAmountMan(prev => (Number(prev)||0) + 100)} className="bg-white hover:bg-slate-100 text-slate-600 border border-slate-200/80 text-xs font-bold py-2.5 rounded-xl transition active:scale-95 shadow-sm">+100만</button>
+                                            <button type="button" onClick={() => setUploadAmountMan(0)} className="bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold py-2.5 rounded-xl transition active:scale-95">초기화</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="p-3 flex gap-2">
+                                    <button type="button" onClick={() => setPendingFile(null)} className="flex-1 py-3.5 text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-full transition">취소</button>
+                                    <button type="button" onClick={confirmUpload} className="flex-1 py-3.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg shadow-blue-200 transition active:scale-95">완료 및 분류</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Edit Amount Modal */}
+                    {editingItem && (
+                        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-[32px] w-full max-w-sm overflow-hidden shadow-2xl p-2 animate-fade-in-up">
+                                <div className="p-5 text-center">
+                                    <h3 className="text-xl font-extrabold text-slate-800">정산 금액 수정</h3>
+                                    <p className="text-xs text-slate-400 mt-1">{editingItem.month} · {editingItem.type} 내역서</p>
+                                </div>
+                                <div className="px-5 pb-5">
+                                    <div className="bg-slate-50 p-4 rounded-[24px]">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="block text-xs font-bold text-slate-500">사장님께 받는 돈</label>
+                                            <span className="text-sm font-extrabold text-blue-600">{((Number(editAmountMan) || 0) * 10000).toLocaleString()} 원</span>
+                                        </div>
+                                        <div className="flex items-center space-x-2 mb-3 bg-white p-1.5 rounded-2xl border border-slate-200 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition">
+                                            <input type="number" step="10" value={editAmountMan} onChange={(e) => setEditAmountMan(e.target.value)} 
+                                                className="w-full px-3 py-1.5 text-right font-extrabold text-lg text-slate-800 outline-none bg-transparent"/>
+                                            <span className="text-sm font-bold text-slate-400 pr-3 shrink-0">만원</span>
+                                        </div>
+                                        <div className="grid grid-cols-4 gap-1.5">
+                                            <button type="button" onClick={() => setEditAmountMan(prev => (Number(prev)||0) + 10)} className="bg-white hover:bg-slate-100 text-slate-600 border border-slate-200/80 text-xs font-bold py-2.5 rounded-xl transition active:scale-95 shadow-sm">+10만</button>
+                                            <button type="button" onClick={() => setEditAmountMan(prev => (Number(prev)||0) + 50)} className="bg-white hover:bg-slate-100 text-slate-600 border border-slate-200/80 text-xs font-bold py-2.5 rounded-xl transition active:scale-95 shadow-sm">+50만</button>
+                                            <button type="button" onClick={() => setEditAmountMan(prev => (Number(prev)||0) + 100)} className="bg-white hover:bg-slate-100 text-slate-600 border border-slate-200/80 text-xs font-bold py-2.5 rounded-xl transition active:scale-95 shadow-sm">+100만</button>
+                                            <button type="button" onClick={() => setEditAmountMan(0)} className="bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold py-2.5 rounded-xl transition active:scale-95">초기화</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="p-3 flex gap-2">
+                                    <button type="button" onClick={() => setEditingItem(null)} className="flex-1 py-3.5 text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-full transition">취소</button>
+                                    <button type="button" onClick={saveEditedAmount} className="flex-1 py-3.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg shadow-blue-200 transition active:scale-95">수정 완료</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 동글동글하고 깔끔한 헤더 */}
+                    <header className="bg-white/80 backdrop-blur-md text-slate-800 px-6 py-4 font-extrabold text-lg flex items-center justify-between sticky top-0 z-20 border-b border-slate-100">
+                        <div className="flex items-center space-x-2.5">
+                            <div className="bg-blue-50 p-2 rounded-2xl flex items-center justify-center">
+                                <RiceChar className="w-6 h-6" />
+                            </div>
+                            <span className="tracking-tight text-slate-800">제주 쌀·팥 물류</span>
+                        </div>
+                        {user ? (
+                            <div className="bg-emerald-50 text-emerald-600 text-xs font-bold px-3 py-1.5 rounded-full flex items-center">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
+                                동기화됨
+                            </div>
+                        ) : (
+                            <div className="bg-slate-100 text-slate-400 text-xs font-bold px-3 py-1.5 rounded-full">연결 중...</div>
+                        )}
+                    </header>
+
+                    <main className="content-area p-5">
+                        {/* 탭 1: 업로드 */}
+                        {activeTab === 'upload' && (
+                            <div className="space-y-5">
+                                <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center relative overflow-hidden">
+                                    <div className="flex items-center justify-center -space-x-2 mb-5 mt-2">
+                                        <div className="animate-float z-10"><RiceChar className="w-24 h-24 drop-shadow-sm" /></div>
+                                        <div className="animate-float" style={{ animationDelay: '1.5s' }}><BeanChar className="w-24 h-24 drop-shadow-sm" /></div>
+                                    </div>
+                                    <h2 className="text-xl font-extrabold text-slate-800 mb-1.5">엑셀 자동 분류</h2>
+                                    <p className="text-sm text-slate-400 mb-7 leading-relaxed">추출한 엑셀 파일을 올려주시면<br/>권역별 시트로 예쁘게 나눠드려요</p>
+                                    
+                                    <div className="file-input-wrapper w-full">
+                                        <button className="w-full bg-blue-600 text-white font-bold py-4 px-6 rounded-full shadow-lg shadow-blue-200 hover:bg-blue-700 transition active:scale-95 flex items-center justify-center gap-2 text-base">
+                                            <Icon name="upload-cloud" />
+                                            <span>파일 선택하기</span>
+                                        </button>
+                                        <input type="file" accept=".xlsx, .xls" onChange={handleFileUpload} />
+                                    </div>
+                                </div>
+
+                                {currentProcess && (
+                                    <div className="bg-white p-6 rounded-[32px] shadow-sm border-2 border-emerald-400/80 animate-fade-in-up relative overflow-hidden">
+                                        <div className="flex items-center justify-between mb-5">
+                                            <div className="flex items-center">
+                                                <div className="bg-slate-50 p-2 rounded-2xl mr-3">
+                                                    {currentProcess.type === '쌀' ? <RiceChar className="w-9 h-9" /> : <BeanChar className="w-9 h-9" />}
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-extrabold text-slate-800 text-base">{currentProcess.type} 분류 완료</h3>
+                                                    <span className="text-xs text-slate-400">{currentProcess.fileName}</span>
+                                                </div>
+                                            </div>
+                                            <span className="text-xs bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-full font-extrabold">
+                                                {currentProcess.month}
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3 mb-5">
+                                            <div className="bg-slate-50 p-4 rounded-[24px] text-center">
+                                                <div className="text-xs font-bold text-slate-400 mb-1">인식된 업체</div>
+                                                <div className="font-extrabold text-slate-800 text-2xl">{currentProcess.totalCompanies}<span className="text-sm font-semibold ml-0.5">곳</span></div>
+                                            </div>
+                                            <div className="bg-slate-50 p-4 rounded-[24px] text-center">
+                                                <div className="text-xs font-bold text-slate-400 mb-1">미분류(신규)</div>
+                                                <div className={`font-extrabold text-2xl ${currentProcess.unclassifiedCount > 0 ? 'text-rose-500' : 'text-slate-800'}`}>
+                                                    {currentProcess.unclassifiedCount}<span className="text-sm font-semibold ml-0.5">곳</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button 
+                                            onClick={() => downloadExcel(currentProcess)}
+                                            className="w-full bg-emerald-500 text-white font-bold py-4 px-6 rounded-full shadow-lg shadow-emerald-100 hover:bg-emerald-600 transition flex items-center justify-center active:scale-95">
+                                            <Icon name="download" />
+                                            <span className="ml-2">분류된 엑셀 내려받기</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* 탭 2: 월별 내역 */}
+                        {activeTab === 'history' && (
+                            <div className="space-y-5">
+                                <h2 className="text-xl font-extrabold text-slate-800 px-2">내역 조회</h2>
+                                
+                                {/* 동글동글한 쌀 / 팥 캡슐형 탭 */}
+                                <div className="flex bg-slate-200/70 p-1.5 rounded-full gap-1">
+                                    <button 
+                                        onClick={() => setHistoryTab('쌀')}
+                                        className={`flex-1 py-2.5 rounded-full font-bold text-sm flex items-center justify-center gap-2 transition-all ${historyTab === '쌀' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                                        <RiceChar className="w-6 h-6" />
+                                        <span>쌀 내역</span>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full font-extrabold ${historyTab === '쌀' ? 'bg-amber-100 text-amber-800' : 'bg-slate-300/70 text-slate-600'}`}>
+                                            {history.filter(h => (h.type || '쌀') === '쌀').length}
+                                        </span>
+                                    </button>
+                                    <button 
+                                        onClick={() => setHistoryTab('팥')}
+                                        className={`flex-1 py-2.5 rounded-full font-bold text-sm flex items-center justify-center gap-2 transition-all ${historyTab === '팥' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                                        <BeanChar className="w-6 h-6" />
+                                        <span>팥 내역</span>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full font-extrabold ${historyTab === '팥' ? 'bg-rose-100 text-rose-800' : 'bg-slate-300/70 text-slate-600'}`}>
+                                            {history.filter(h => h.type === '팥').length}
+                                        </span>
+                                    </button>
+                                </div>
+
+                                {history.filter(item => (item.type || '쌀') === historyTab).length === 0 ? (
+                                    <div className="text-center text-slate-400 py-16 bg-white rounded-[32px] border border-dashed border-slate-200 flex flex-col items-center justify-center">
+                                        <div className="opacity-40 mb-3 grayscale">
+                                            {historyTab === '쌀' ? <RiceChar className="w-16 h-16" /> : <BeanChar className="w-16 h-16" />}
+                                        </div>
+                                        <p className="text-sm font-semibold">등록된 {historyTab} 내역이 없어요</p>
+                                    </div>
+                                ) : (
+                                    history.filter(item => (item.type || '쌀') === historyTab).map((item) => (
+                                        <div key={item.id} className="bg-white p-5 rounded-[28px] shadow-sm border border-slate-100 relative overflow-hidden">
+                                            <div className="flex justify-between items-center mb-3">
+                                                <div className="flex items-center gap-3.5">
+                                                    <div className={`p-2.5 rounded-[20px] ${item.type === '팥' ? 'bg-rose-50/80' : 'bg-amber-50/80'}`}>
+                                                        {item.type === '팥' ? <BeanChar className="w-10 h-10" /> : <RiceChar className="w-10 h-10" />}
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2 mb-0.5">
+                                                            <span className="text-lg font-extrabold text-slate-800">{item.month || '날짜미상'}</span>
+                                                        </div>
+                                                        <span className="text-xs font-medium text-slate-400 block">{item.date} 업로드</span>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-slate-800 font-extrabold text-xl">{item.totalSacks.toLocaleString()}<span className="text-sm font-semibold text-slate-500 ml-0.5">포</span></div>
+                                                    <div className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full mt-1 inline-block">{(item.expectedAmount || 0).toLocaleString()}원</div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-50">
+                                                <button onClick={() => { setCurrentProcess(item); setActiveTab('upload'); }} className="bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs py-3 rounded-full font-bold transition active:scale-95">
+                                                    요약 보기
+                                                </button>
+                                                <button onClick={() => { setEditingItem(item); setEditAmountMan((item.expectedAmount || 0) / 10000); }} className="bg-amber-50/80 hover:bg-amber-100 text-amber-800 text-xs py-3 rounded-full font-bold transition active:scale-95">
+                                                    금액 수정
+                                                </button>
+                                                <button onClick={() => downloadExcel(item)} className="bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs py-3 rounded-full font-bold transition active:scale-95">
+                                                    엑셀 다운
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+
+                        {/* 탭 3: 나의 하차지 */}
+                        {activeTab === 'regions' && (
+                            <div className="space-y-5">
+                                <h2 className="text-xl font-extrabold text-slate-800 px-2">나의 하차지</h2>
+                                
+                                <div className="bg-white p-5 rounded-[28px] shadow-sm border border-slate-100">
+                                    <h3 className="text-sm font-extrabold text-slate-700 mb-3 flex items-center px-1"><Icon name="plus-circle" /><span className="ml-1.5">신규 하차지 등록</span></h3>
+                                    <form onSubmit={addRegion} className="flex flex-col sm:flex-row gap-2.5">
+                                        <div className="flex gap-2 flex-1 min-w-0">
+                                            <input type="text" placeholder="상호명 입력" value={newCompName} onChange={e=>setNewCompName(e.target.value)} className="w-full min-w-0 flex-1 bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm font-medium outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"/>
+                                            <select value={newCompRegion} onChange={e=>setNewCompRegion(e.target.value)} className="shrink-0 bg-slate-50 border border-slate-200 rounded-full px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-500 transition">
+                                                <option value="제주시">제주시</option>
+                                                <option value="신제주">신제주</option>
+                                                <option value="서쪽">서쪽</option>
+                                                <option value="동쪽">동쪽</option>
+                                                <option value="서귀포">서귀포</option>
+                                            </select>
+                                        </div>
+                                        <button type="submit" className="w-full sm:w-auto shrink-0 bg-slate-800 text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-slate-900 active:scale-95 transition shadow-md shadow-slate-200">등록</button>
+                                    </form>
+                                </div>
+
+                                <div className="bg-white rounded-[28px] shadow-sm border border-slate-100 overflow-hidden">
+                                    <div className="px-6 py-4 bg-slate-50/50 border-b border-slate-100 font-extrabold text-slate-700 text-sm flex justify-between items-center">
+                                        <span>등록된 하차지 목록</span>
+                                        <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-extrabold">{Object.keys(regions).length}곳</span>
+                                    </div>
+                                    <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-50 px-2">
+                                        {Object.entries(regions).map(([name, region], idx) => (
+                                            <div key={idx} className="px-4 py-3.5 flex justify-between items-center hover:bg-slate-50/80 rounded-2xl transition">
+                                                <span className="text-sm font-bold text-slate-700">{name}</span>
+                                                <span className="text-xs px-3 py-1 bg-slate-100 text-slate-600 rounded-full font-bold">{region}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 탭 4: 통계 */}
+                        {activeTab === 'stats' && (
+                            <div className="space-y-5">
+                                <div className="flex justify-between items-center px-2">
+                                    <h2 className="text-xl font-extrabold text-slate-800">정산 및 통계</h2>
+                                </div>
+
+                                {/* Filter Controls */}
+                                <div className="bg-white p-2.5 rounded-full shadow-sm border border-slate-100 flex gap-2">
+                                    <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="flex-1 bg-slate-50 border-0 text-slate-700 font-bold text-sm rounded-full focus:ring-2 focus:ring-blue-100 block px-4 py-2.5 outline-none transition">
+                                        <option value="ALL">모든 월 전체</option>
+                                        {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                    <select value={filterType} onChange={e => setFilterType(e.target.value)} className="bg-slate-50 border-0 text-slate-700 font-bold text-sm rounded-full focus:ring-2 focus:ring-blue-100 block px-4 py-2.5 outline-none transition">
+                                        <option value="전체">모든 품목</option>
+                                        <option value="쌀">쌀</option>
+                                        <option value="팥">팥</option>
+                                    </select>
+                                </div>
+                                
+                                <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 rounded-[32px] shadow-lg shadow-blue-200/50 text-white">
+                                    <div className="text-blue-100 text-sm font-medium mb-1.5 flex items-center justify-between">
+                                        <span>사장님께 받은 총 정산금</span>
+                                        <span className="text-[11px] bg-white/20 px-2.5 py-1 rounded-full text-white font-bold backdrop-blur-sm">10만원 단위</span>
+                                    </div>
+                                    <div className="text-3xl font-extrabold mb-6 tracking-tight">
+                                        {filteredStats.expected.toLocaleString()} <span className="text-xl font-normal opacity-80">원</span>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4 bg-white/10 p-4 rounded-[24px] backdrop-blur-sm">
+                                        <div>
+                                            <div className="text-blue-100 text-xs mb-1">총 배송 수량</div>
+                                            <div className="font-extrabold text-lg">{filteredStats.sacks.toLocaleString()} 포</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-blue-100 text-xs mb-1">업로드 문서</div>
+                                            <div className="font-extrabold text-lg">{filteredStats.docs.length} 건</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden p-2">
+                                    <div className="px-4 py-3 font-extrabold text-slate-700 text-sm">
+                                        권역별 배송량 비율
+                                    </div>
+                                    <div className="p-4 space-y-4">
+                                        {Object.entries(filteredStats.regions).map(([rName, rSacks]) => (
+                                            <div key={rName} className="flex items-center">
+                                                <div className="w-16 text-sm font-bold text-slate-600">{rName}</div>
+                                                <div className="flex-1 mx-3 h-3 bg-slate-100 rounded-full overflow-hidden">
+                                                    <div className={`h-full rounded-full transition-all duration-500 ${rName === '미분류' ? 'bg-rose-400' : 'bg-blue-500'}`} style={{ width: `${filteredStats.sacks > 0 ? (rSacks / filteredStats.sacks) * 100 : 0}%` }}></div>
+                                                </div>
+                                                <div className="w-14 text-right text-sm font-extrabold text-slate-700">{rSacks.toLocaleString()}<span className="text-xs font-normal text-slate-400 ml-0.5">포</span></div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {/* 플로팅 캡슐 하단 탭바 */}
+                    <div className="bottom-nav-container">
+                        <nav className="bottom-nav">
+                            <div className={`nav-item ${activeTab === 'upload' ? 'active' : ''}`} onClick={() => setActiveTab('upload')}>
+                                <Icon name="upload" />
+                                <span>업로드</span>
+                            </div>
+                            <div className={`nav-item ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>
+                                <Icon name="folder-check" />
+                                <span>내역조회</span>
+                            </div>
+                            <div className={`nav-item ${activeTab === 'regions' ? 'active' : ''}`} onClick={() => setActiveTab('regions')}>
+                                <Icon name="map-pin" />
+                                <span>하차지</span>
+                            </div>
+                            <div className={`nav-item ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')}>
+                                <Icon name="pie-chart" />
+                                <span>통계</span>
+                            </div>
+                        </nav>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
