@@ -356,8 +356,13 @@
                 reader.onload = (evt) => {
                     const bstr = evt.target.result;
                     const wb = XLSX.read(bstr, { type: 'binary' });
-                    const wsname = wb.SheetNames[0];
-                    const ws = wb.Sheets[wsname];
+                    
+                    // ★ 수정: '지역분류 데이터' 시트(전체 목록)가 있으면 우선적으로 읽고, 없으면 첫 번째 시트를 읽습니다.
+                    let targetSheetName = wb.SheetNames[0];
+                    if (wb.SheetNames.includes("지역분류 데이터")) {
+                        targetSheetName = "지역분류 데이터";
+                    }
+                    const ws = wb.Sheets[targetSheetName];
                     const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
                     
                     setUploadAmountMan(0);
