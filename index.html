@@ -73,19 +73,35 @@
 
         // 10월 데이터 기준: 상호, 지역, 주소, 전화번호 마스터 데이터 완벽 구축
         const initialMasterData = {
+            "건입떡집": { region: "제주시", address: "제주시 건입동", phone: "010-9487-5889" },
+            "고향떡집": { region: "제주시", address: "제주시", phone: "010-6693-3160" },
+            "낙원떡방아": { region: "제주시", address: "제주시", phone: "010-4690-2605" },
             "낙원떡집(동문)": { region: "제주시", address: "제주시 중앙로11길 8 (동문시장)", phone: "010-3639-3628" },
             "낙원떡방아(동문)": { region: "제주시", address: "제주시 중앙로11길 8 (동문시장)", phone: "010-3639-3628" },
+            "남광떡집": { region: "제주시", address: "제주시", phone: "010-2691-5976" },
             "도남떡방앗간": { region: "제주시", address: "제주시 도남로 84", phone: "010-6211-3848" },
             "도남떡집": { region: "제주시", address: "제주시 도남로 84", phone: "010-6211-3848" },
             "도남오거리": { region: "제주시", address: "제주 제주시 신성로6길 3", phone: "010-3367-8880" },
             "도남오거리떡방앗간": { region: "제주시", address: "제주 제주시 신성로6길 3", phone: "010-3367-8880" },
+            "동문떡방": { region: "제주시", address: "제주시 동문시장", phone: "010-5559-2950" },
             "동백": { region: "제주시", address: "제주 제주시 서문로4길 15-1", phone: "010-4690-4077" },
             "동백떡집": { region: "제주시", address: "제주 제주시 서문로4길 15-1", phone: "010-4690-4077" },
             "떡마을": { region: "제주시", address: "제주 제주시 남광북1길 46", phone: "010-4693-7920" },
             "떡방동행": { region: "제주시", address: "건주로4길 24", phone: "010-4595-5606" },
             "떡하니": { region: "제주시", address: "제주시 도남로15길 25, 101호", phone: "010-3692-5054" },
+            "마실": { region: "제주시", address: "제주시", phone: "010-4991-1352" },
+            "만민": { region: "제주시", address: "제주시", phone: "010-4983-2026" },
+            "명가떡사랑": { region: "제주시", address: "제주시", phone: "010-7449-6708" },
             "명당떡집": { region: "제주시", address: "제주시 신성로 78", phone: "010-3412-3532" },
+            "명당떡집용담점": { region: "제주시", address: "제주시 용담동", phone: "010-6745-2080" },
+            "명당양과구남점": { region: "제주시", address: "제주시 구남동", phone: "010-3692-4601" },
+            "명류당": { region: "제주시", address: "제주시", phone: "010-8244-1855" },
+            "명원가": { region: "제주시", address: "제주시", phone: "010-6726-2285" },
             "미듬민속떡집": { region: "제주시", address: "제주시 인다13길 10-8", phone: "010-9449-2594" },
+            "삼다도떡집": { region: "제주시", address: "제주시", phone: "010-8893-8923" },
+            "새서울떡집": { region: "제주시", address: "제주시", phone: "010-5758-6002" },
+            "서사라": { region: "제주시", address: "제주시 서사라", phone: "010-4665-2188" },
+            "서우봉떡집": { region: "동쪽", address: "제주시 조천읍 함덕리", phone: "010-4086-7833" },
             "섬나라": { region: "제주시", address: "제주시 중앙로 358,1층", phone: "010-3107-6699" },
             "섬나라오메기": { region: "제주시", address: "제주시 중앙로 358,1층", phone: "010-3375-4545" },
             "설나라오메기": { region: "제주시", address: "제주시 중앙로 358,1층", phone: "010-3375-4545" },
@@ -94,24 +110,56 @@
             "세진": { region: "제주시", address: "제주시 서광로11길 11-1", phone: "010-2689-2318" },
             "세진방앗간": { region: "제주시", address: "제주시 서광로11길 11-1", phone: "010-2689-2318" },
             "소망떡집": { region: "제주시", address: "제주 제주시 진동로5길 31", phone: "010-2730-1238" },
+            "소민떡방": { region: "제주시", address: "제주시", phone: "010-3347-2508" },
+            "수가성오메기떡": { region: "제주시", address: "제주시", phone: "010-6655-8562" },
+            "수라간떡방": { region: "제주시", address: "제주시", phone: "010-3459-9882" },
             "수빈": { region: "제주시", address: "제주 제주시 서광로20길 7", phone: "010-7270-0389" },
             "수빈떡방앗간": { region: "제주시", address: "제주 제주시 서광로20길 7", phone: "010-7270-0389" },
+            "시장떡집": { region: "제주시", address: "제주시 동문시장", phone: "010-3418-6243" },
             "신선": { region: "제주시", address: "제주시 신산로7길 36-2", phone: "010-3637-1919" },
             "신선떡방앗간": { region: "제주시", address: "제주시 신산로7길 36-2", phone: "010-3637-1919" },
+            "신성떡집": { region: "제주시", address: "제주시", phone: "010-3816-9909" },
+            "신촌떡방앗간": { region: "동쪽", address: "제주시 조천읍 신촌리", phone: "010-5162-1400" },
+            "아리랑떡방": { region: "제주시", address: "제주시", phone: "010-6691-1991" },
+            "여진떡집": { region: "제주시", address: "제주시", phone: "010-4709-2647" },
+            "오돌또기오메기떡": { region: "제주시", address: "제주시", phone: "010-4692-9201" },
+            "오물오물오메기떡": { region: "제주시", address: "제주시", phone: "010-4692-9201" },
+            "오일장떡집": { region: "신제주", address: "제주시 오일장서길", phone: "010-8632-4554" },
+            "외도오복떡집": { region: "서쪽", address: "제주시 외도일동", phone: "010-3969-0087" },
             "용담": { region: "제주시", address: "제주 제주시 흥운길 25-4", phone: "010-9838-5128" },
             "용담떡방앗간": { region: "제주시", address: "제주 제주시 흥운길 25-4", phone: "010-9838-5128" },
             "용문떡방": { region: "제주시", address: "제주 제주시 용문로 137", phone: "010-9840-9493" },
+            "원당떡집": { region: "제주시", address: "제주시 삼양동", phone: "010-4755-3310" },
+            "원조함덕떡방앗간": { region: "동쪽", address: "제주시 조천읍 함덕리", phone: "010-2698-8952" },
+            "웰빙제주보리떡": { region: "제주시", address: "제주시", phone: "010-4114-4589" },
+            "은성떡방앗간": { region: "제주시", address: "제주시", phone: "010-3698-2501" },
+            "익섬떡방앗간": { region: "제주시", address: "제주시", phone: "010-3699-2669" },
+            "인화떡방앗간": { region: "제주시", address: "제주시 인화동", phone: "010-3698-1428" },
+            "장인오메기": { region: "제주시", address: "제주시", phone: "010-3698-4400" },
+            "제일떡방앗간": { region: "제주시", address: "제주시", phone: "010-3697-1334" },
             "제주곱딱": { region: "제주시", address: "제주 제주시 연무정길 54-1 1층", phone: "010-7158-9559" },
             "제주떡고을": { region: "제주시", address: "태성중2길 32-1", phone: "010-2698-3434" },
+            "제주떡집": { region: "제주시", address: "제주시", phone: "010-0000-0000" },
+            "제주민속떡집": { region: "제주시", address: "제주시", phone: "010-3694-6778" },
+            "제주백록오메기": { region: "제주시", address: "제주시", phone: "010-4690-3842" },
+            "제주올레떡집": { region: "제주시", address: "제주시", phone: "010-2736-9365" },
+            "제주촘오메기": { region: "제주시", address: "제주시", phone: "010-9940-1759" },
+            "제주탐나오메기떡": { region: "제주시", address: "제주시", phone: "010-9897-3197" },
+            "제주할망오메기떡": { region: "제주시", address: "제주시", phone: "010-6778-2634" },
+            "(주)범주 동서남북떡": { region: "제주시", address: "제주시", phone: "010-6204-1514" },
+            "코시롱돌코롬": { region: "제주시", address: "제주시", phone: "010-6670-3423" },
+            "콩떡": { region: "제주시", address: "제주시", phone: "010-3017-0567" },
             "큰일": { region: "제주시", address: "제주시 남광북3길 14-6", phone: "010-3693-7990" },
             "큰일떡방아": { region: "제주시", address: "제주시 남광북3길 14-6", phone: "010-3693-7990" },
+            "하귀떡방앗간": { region: "서쪽", address: "제주시 애월읍 하귀리", phone: "010-5020-8778" },
+            "하르방떡방": { region: "제주시", address: "제주시", phone: "010-3698-0888" },
             "한일": { region: "제주시", address: "제주시 동문로8길 11-2", phone: "010-9840-2901" },
             "한천식품": { region: "제주시", address: "제주 제주시 관덕로3길 5", phone: "010-3690-3007" },
             "한천떡집": { region: "제주시", address: "제주 제주시 관덕로3길 5", phone: "010-3690-3007" },
+            "해당섬오메기떡방": { region: "제주시", address: "제주시", phone: "010-4696-0459" },
             "현대": { region: "제주시", address: "제주시 관덕로14길 12", phone: "010-4507-5020" },
             "현대떡집": { region: "제주시", address: "제주시 관덕로14길 12", phone: "010-4507-5020" },
-            "건입떡집": { region: "제주시", address: "", phone: "010-9487-5889" },
-            "수라간떡방": { region: "제주시", address: "", phone: "010-3459-9882" },
+            "화북떡집": { region: "제주시", address: "제주시 화북동", phone: "010-3994-4492" },
 
             "도두떡집": { region: "신제주", address: "제주시 도공로 34-4", phone: "010-9890-8858" },
             "미도": { region: "신제주", address: "제주시 우령2길 22", phone: "010-9840-1146" },
@@ -126,29 +174,46 @@
             "행복한떡방": { region: "신제주", address: "제주시 과원북4길 69 효정빌딩3차", phone: "010-8156-3380" },
 
             "대성떡방앗간": { region: "서쪽", address: "서귀포시 대정읍 영서중로13번길 7", phone: "010-3692-8263" },
+            "대정떡집": { region: "서쪽", address: "서귀포시 대정읍", phone: "010-4199-4854" },
             "대정중앙떡방앗간": { region: "서쪽", address: "서귀포시 대정읍 상모리 3942-3", phone: "010-4696-0496" },
             "대정하모떡집": { region: "서쪽", address: "서귀포시 대정읍 동일하모로149번길 26", phone: "010-5777-6341" },
             "동귀떡방앗간": { region: "서쪽", address: "제주시 애월읍 하귀로 113", phone: "010-6691-3011" },
             "떡보의하루": { region: "서쪽", address: "제주시 우정로 72", phone: "010-4587-7979" },
+            "민영이네떡방아": { region: "서쪽", address: "제주시 한림읍", phone: "010-7673-1661" },
+            "민희방앗간": { region: "서쪽", address: "제주시 한경면", phone: "010-2699-1433" },
+            "부민떡방아": { region: "서쪽", address: "제주시 한림읍", phone: "010-3558-2630" },
+            "산양떡방앗간": { region: "서쪽", address: "제주시 한경면 산양리", phone: "010-5171-5289" },
             "저지떡방앗간": { region: "서쪽", address: "제주시 한경면 중산간서로 3650", phone: "010-2690-0676" },
             "제주기정떡": { region: "서쪽", address: "제주시 애월읍 평화로 2747", phone: "010-2768-7615" },
             "풍년떡집": { region: "서쪽", address: "제주 서귀포시 대정읍 영서중로13번길 9", phone: "010-6620-0081" },
             "한림우리떡": { region: "서쪽", address: "제주시 한림읍 한림중앙로 38", phone: "010-7432-3150" },
             "한림우리떡방앗간": { region: "서쪽", address: "제주시 한림읍 한림중앙로 38", phone: "010-7432-3150" },
 
-            "남문떡방앗간": { region: "동쪽", address: "제주시 구좌읍 김녕남6길 5", phone: "064-783-5576" },
+            "남문떡방앗간": { region: "동쪽", address: "제주시 구좌읍 김녕남6길 5", phone: "010-2690-4636" },
             "남원떡집": { region: "동쪽", address: "서귀포시 남원읍 남원체육관로 318 남원떡집", phone: "010-3694-5030" },
             "두손떡집": { region: "동쪽", address: "서귀포시 표선면 표선관정로104번길 1", phone: "010-3087-0468" },
             "명성떡방앗간": { region: "동쪽", address: "서귀포시 표선면 표선중앙로90번길 1", phone: "010-3814-2684" },
+            "우리떡방(동남)": { region: "동쪽", address: "서귀포시 성산읍 고성리", phone: "010-8662-3061" },
             "함덕우리떡집": { region: "동쪽", address: "제주시 조천읍 함덕8길 10", phone: "010-8661-1885" },
             "우리떡방앗간(함덕)": { region: "동쪽", address: "제주시 조천읍 함덕8길 10", phone: "010-8661-1885" },
 
+            "떡마을(서귀)": { region: "서귀포", address: "서귀포시", phone: "010-9555-6353" },
+            "떡마을(서귀포)": { region: "서귀포", address: "서귀포시", phone: "010-9555-6353" },
+            "떡보의하루(서귀포)": { region: "서귀포", address: "서귀포시 동홍로 41", phone: "010-9138-4144" },
+            "떡보의하루(서귀)": { region: "서귀포", address: "서귀포시 동홍로 41", phone: "010-9138-4144" },
+            "서귀떡방아": { region: "서귀포", address: "서귀포시", phone: "010-3691-9359" },
+            "예담떡집": { region: "서귀포", address: "서귀포시", phone: "010-6483-8909" },
+            "오메기점빵": { region: "서귀포", address: "서귀포시", phone: "010-8629-3298" },
             "오복떡방앗간": { region: "서귀포", address: "서귀포시 중앙로48번길 29", phone: "010-3697-7591" },
+            "일일참": { region: "서귀포", address: "서귀포시", phone: "010-8611-4975" },
+            "정담오메기떡": { region: "서귀포", address: "서귀포시", phone: "010-9593-4656" },
             "주공방아간": { region: "서귀포", address: "제주 서귀포시 태평로 496-7 동홍4주공아파트", phone: "010-5762-2489" },
             "주공떡방아간": { region: "서귀포", address: "제주 서귀포시 태평로 496-7 동홍4주공아파트", phone: "010-5762-2489" },
+            "주니네오메기떡(한라궁)": { region: "서귀포", address: "서귀포시", phone: "010-3825-6692" },
             "중문떡집": { region: "서귀포", address: "서귀포시 천제연로188번길 5-1 참기름 제분", phone: "010-2978-5000" },
-            "떡보의하루(서귀포)": { region: "서귀포", address: "", phone: "010-9138-4144" },
-            "떡보의하루(서귀)": { region: "서귀포", address: "", phone: "010-9138-4144" }
+            "중정로떡방아": { region: "서귀포", address: "서귀포시 중정로", phone: "010-7768-4377" },
+            "평화떡집": { region: "서귀포", address: "서귀포시", phone: "010-9664-6937" },
+            "혜성떡방아": { region: "서귀포", address: "서귀포시", phone: "010-3119-7189" }
         };
 
         const Icon = ({ name }) => {
@@ -313,21 +378,23 @@
                 let colMap = {};
                 for (let i = 0; i < data.length; i++) {
                     const row = data[i];
-                    if (!row) continue;
+                    if (!row || !Array.isArray(row)) continue;
                     const rowStr = row.join(" ");
                     if (rowStr.includes("상호") && rowStr.includes("대표자")) {
                         headerIdx = i;
                         row.forEach((val, idx) => {
-                            if (val) {
-                                const cleanVal = String(val).trim();
+                            if (val !== null && val !== undefined) {
+                                const cleanVal = String(val).replace(/\s+/g, "");
                                 if (cleanVal.includes("번호") && !cleanVal.includes("전화") && !cleanVal.includes("코드")) colMap.no = idx;
-                                if (cleanVal.includes("상호")) colMap.name = idx;
-                                if (cleanVal.includes("대표자")) colMap.rep = idx;
-                                if (cleanVal.includes("주소")) colMap.address = idx;
-                                if (cleanVal.includes("전화")) colMap.phone = idx;
-                                if (cleanVal.includes("국산") && !cleanVal.includes("kg")) colMap.krSack = idx;
-                                if (cleanVal.includes("25kg") || cleanVal.includes("포)")) colMap.krSack = idx;
-                                if (cleanVal.includes("미국산") && !cleanVal.includes("kg")) colMap.usSack = idx;
+                                else if (cleanVal.includes("상호")) colMap.name = idx;
+                                else if (cleanVal.includes("대표자")) colMap.rep = idx;
+                                else if (cleanVal.includes("주소")) colMap.address = idx;
+                                else if (cleanVal.includes("전화")) colMap.phone = idx;
+                                // 미국산(포)가 국산(포)를 덮어쓰지 못하도록 엄격히 분리!
+                                else if (cleanVal.includes("미국산") && (cleanVal.includes("포") || !cleanVal.includes("kg"))) colMap.usSack = idx;
+                                else if ((cleanVal.includes("국산") || cleanVal.includes("25kg") || cleanVal.includes("포")) && !cleanVal.includes("미국산") && !cleanVal.includes("kg")) {
+                                    if (colMap.krSack === undefined) colMap.krSack = idx;
+                                }
                             }
                         });
                         break;
@@ -339,6 +406,11 @@
                     return;
                 }
 
+                // 만약 수량 열을 못 찾았다면 대표자 바로 다음 열을 기본 수량 열로 지정
+                if (colMap.krSack === undefined) {
+                    colMap.krSack = colMap.rep !== undefined ? colMap.rep + 1 : 3;
+                }
+
                 const parsedList = [];
                 let unclassifiedCount = 0;
                 let totalSacks = 0;
@@ -348,21 +420,26 @@
                     if (!row || row.length === 0) continue;
                     
                     const name = row[colMap.name];
-                    if (!name || String(name).trim() === '' || String(name).includes("합계") || String(name).includes("총합")) continue;
-
+                    if (!name) continue;
                     const cleanName = String(name).trim();
-                    const origNo = colMap.no !== undefined && row[colMap.no] ? row[colMap.no] : (parsedList.length + 1);
-                    const rep = colMap.rep !== undefined ? (row[colMap.rep] || "") : "";
-                    const sacks = colMap.krSack !== undefined ? (parseInt(String(row[colMap.krSack]).replace(/,/g, '')) || 0) : 0;
-                    const usSacks = colMap.usSack !== undefined ? (parseInt(String(row[colMap.usSack]).replace(/,/g, '')) || 0) : 0;
+                    if (cleanName === '' || cleanName.includes("합계") || cleanName.includes("총합") || cleanName.includes("계")) continue;
+
+                    const origNo = (colMap.no !== undefined && row[colMap.no] !== undefined && row[colMap.no] !== "") ? row[colMap.no] : (parsedList.length + 1);
+                    const rep = (colMap.rep !== undefined && row[colMap.rep] !== undefined) ? String(row[colMap.rep]).trim() : "";
                     
-                    // 핵심: 수량이 아예 없는(0포) 업체는 10월 원본 기준처럼 제외 처리!
+                    const rawKr = colMap.krSack !== undefined ? row[colMap.krSack] : 0;
+                    const sacks = parseInt(String(rawKr || "0").replace(/[^0-9]/g, ''), 10) || 0;
+                    
+                    const rawUs = colMap.usSack !== undefined ? row[colMap.usSack] : 0;
+                    const usSacks = parseInt(String(rawUs || "0").replace(/[^0-9]/g, ''), 10) || 0;
+                    
+                    // 수량이 아예 없는(0포) 업체는 제외
                     if (sacks === 0 && usSacks === 0) continue;
 
                     const master = masterData[cleanName];
                     let region = master ? master.region : "미분류";
-                    let address = master && master.address ? master.address : (colMap.address !== undefined ? (row[colMap.address] || "") : "");
-                    let phone = master && master.phone ? master.phone : (colMap.phone !== undefined ? (row[colMap.phone] || "") : "");
+                    let address = (master && master.address) ? master.address : (colMap.address !== undefined && row[colMap.address] ? String(row[colMap.address]).trim() : "");
+                    let phone = (master && master.phone) ? master.phone : (colMap.phone !== undefined && row[colMap.phone] ? String(row[colMap.phone]).trim() : "");
 
                     if (region === "미분류") {
                         unclassifiedCount++;
@@ -378,8 +455,14 @@
                         address: address,
                         phone: phone,
                         sacks: sacks,
-                        usSacks: usSacks
+                        usSacks: usSacks,
+                        originalRow: row
                     });
+                }
+
+                if (parsedList.length === 0) {
+                    showToast("추출된 배송 업체가 0곳입니다. 엑셀의 수량 데이터를 확인해주세요.", "error");
+                    return;
                 }
 
                 const newHistory = {
@@ -403,9 +486,9 @@
                         setCurrentProcess({...newHistory, id: docId});
                         setHistoryTab(targetType);
                         if (unclassifiedCount > 0) {
-                            showToast(`신규 업체 ${unclassifiedCount}곳 미분류! 하차지 탭에서 등록해주세요.`, "error");
+                            showToast(`총 ${parsedList.length}곳 (${totalSacks}포) 분류! 미분류 ${unclassifiedCount}곳 있음`, "error");
                         } else {
-                            showToast(`총 ${parsedList.length}곳 완벽 분류 완료!`);
+                            showToast(`총 ${parsedList.length}곳 (${totalSacks}포) 완벽 분류 완료!`);
                         }
                     }).catch(e => {
                         console.error("Upload save error:", e);
@@ -413,7 +496,7 @@
                     });
                 } else {
                     setCurrentProcess(newHistory);
-                    showToast("임시 분류 완료 (클라우드 미연결)", "error");
+                    showToast(`임시 분류 완료: ${parsedList.length}곳 (${totalSacks}포)`, "success");
                 }
             };
 
@@ -437,59 +520,102 @@
 
             // 4. 10월 원본 양식과 100% 동일한 고품질 엑셀 생성 함수 (테두리, 색상, 열너비 완벽 적용)
             const downloadExcel = (processData) => {
+                if (!processData || !processData.data) {
+                    showToast("다운로드할 데이터가 없습니다.", "error");
+                    return;
+                }
+
                 const wb = XLSX.utils.book_new();
                 
-                // 데이터 구버전 호환 보정 (주소/전화번호 강제 매칭)
-                const enrichedData = processData.data.filter(d => (d.sacks > 0 || d.usSacks > 0)).map((item, idx) => {
-                    const master = masterData[item.name] || {};
-                    return {
-                        no: item.no || (idx + 1),
-                        name: item.name,
-                        rep: item.rep || "",
-                        region: (item.region && item.region !== "미분류") ? item.region : (master.region || "미분류"),
-                        address: item.address || master.address || "",
-                        phone: item.phone || master.phone || "",
-                        sacks: item.sacks || 0,
-                        usSacks: item.usSacks || ""
-                    };
+                // 구버전 내역(수량이 0으로 잘못 저장된 내역)도 originalRow에서 수량을 강제 복구!
+                const recoveredData = [];
+                processData.data.forEach((item, idx) => {
+                    let sacks = Number(item.sacks) || 0;
+                    let usSacks = Number(item.usSacks) || 0;
+                    let origNo = item.no || (idx + 1);
+                    let phoneFromRow = "";
+
+                    // 만약 이전 버그로 인해 sacks가 0으로 저장되어 있다면 originalRow에서 구출
+                    if (sacks === 0 && item.originalRow && Array.isArray(item.originalRow)) {
+                        const r = item.originalRow;
+                        if (r[0] && !isNaN(parseInt(r[0]))) origNo = r[0];
+                        // 쌀 양식: [번호, 상호, 대표자, 국산쌀(포), 쌀수량(kg)...] -> index 3이 포수
+                        // 팥 양식: [번호, 코드, 상호, 대표자, 25kg(포), 팥수량, 전화번호] -> index 4가 포수
+                        const cand3 = parseInt(String(r[3] || "0").replace(/[^0-9]/g, ''), 10) || 0;
+                        const cand4 = parseInt(String(r[4] || "0").replace(/[^0-9]/g, ''), 10) || 0;
+                        if (cand3 > 0 && cand3 < 1000) sacks = cand3;
+                        else if (cand4 > 0 && cand4 < 1000) sacks = cand4;
+
+                        r.forEach(cell => {
+                            if (cell && String(cell).includes("010-")) phoneFromRow = String(cell).trim();
+                        });
+                    }
+
+                    // 수량이 있는 실제 배송 업체만 담기
+                    if (sacks > 0 || usSacks > 0) {
+                        const cleanName = String(item.name).trim();
+                        const master = masterData[cleanName] || {};
+                        recoveredData.push({
+                            no: origNo,
+                            name: cleanName,
+                            rep: item.rep || "",
+                            region: (master.region) ? master.region : ((item.region && item.region !== "미분류") ? item.region : "미분류"),
+                            address: item.address || master.address || "",
+                            phone: item.phone || master.phone || phoneFromRow || "",
+                            sacks: sacks,
+                            usSacks: usSacks > 0 ? usSacks : ""
+                        });
+                    }
                 });
 
+                if (recoveredData.length === 0) {
+                    showToast("출력할 수량 데이터가 없습니다. 엑셀 파일을 다시 업로드해주세요!", "error");
+                    return;
+                }
+
                 const byRegion = { "제주시": [], "신제주": [], "서쪽": [], "동쪽": [], "서귀포": [], "미분류": [] };
-                enrichedData.forEach(item => {
+                recoveredData.forEach(item => {
                     if (byRegion[item.region]) byRegion[item.region].push(item);
                     else byRegion["미분류"].push(item);
                 });
 
                 // 엑셀 셀 스타일 정의
                 const borderThin = {
-                    top: { style: "thin", color: { rgb: "D1D5DB" } },
-                    bottom: { style: "thin", color: { rgb: "D1D5DB" } },
-                    left: { style: "thin", color: { rgb: "D1D5DB" } },
-                    right: { style: "thin", color: { rgb: "D1D5DB" } }
+                    top: { style: "thin", color: { rgb: "CBD5E1" } },
+                    bottom: { style: "thin", color: { rgb: "CBD5E1" } },
+                    left: { style: "thin", color: { rgb: "CBD5E1" } },
+                    right: { style: "thin", color: { rgb: "CBD5E1" } }
                 };
                 const styleHeader = {
                     font: { name: "맑은 고딕", sz: 11, bold: true, color: { rgb: "FFFFFF" } },
-                    fill: { fgColor: { rgb: "4F81BD" } },
+                    fill: { fgColor: { rgb: "3B82F6" } },
                     alignment: { horizontal: "center", vertical: "center" },
                     border: borderThin
                 };
                 const styleTitle = {
-                    font: { name: "맑은 고딕", sz: 13, bold: true, color: { rgb: "1E293B" } },
-                    alignment: { horizontal: "center", vertical: "center" }
+                    font: { name: "맑은 고딕", sz: 13, bold: true, color: { rgb: "0F172A" } },
+                    fill: { fgColor: { rgb: "E2E8F0" } },
+                    alignment: { horizontal: "center", vertical: "center" },
+                    border: borderThin
                 };
                 const styleCellCenter = {
-                    font: { name: "맑은 고딕", sz: 10 },
+                    font: { name: "맑은 고딕", sz: 10, color: { rgb: "1E293B" } },
                     alignment: { horizontal: "center", vertical: "center" },
                     border: borderThin
                 };
                 const styleCellLeft = {
-                    font: { name: "맑은 고딕", sz: 10 },
+                    font: { name: "맑은 고딕", sz: 10, color: { rgb: "1E293B" } },
                     alignment: { horizontal: "left", vertical: "center" },
                     border: borderThin
                 };
+                const styleCellBold = {
+                    font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "1E40AF" } },
+                    alignment: { horizontal: "center", vertical: "center" },
+                    border: borderThin
+                };
                 const styleSum = {
-                    font: { name: "맑은 고딕", sz: 11, bold: true },
-                    fill: { fgColor: { rgb: "F1F5F9" } },
+                    font: { name: "맑은 고딕", sz: 11, bold: true, color: { rgb: "0F172A" } },
+                    fill: { fgColor: { rgb: "FEF3C7" } },
                     alignment: { horizontal: "center", vertical: "center" },
                     border: borderThin
                 };
@@ -497,54 +623,64 @@
                 // 시트 1, 2용 블록 생성기 (10월 양식: 상호, 대표자, 주소, 전화번호, 국산(포), 미국산(포))
                 const buildRegionSheet = (regionNames, includeTotal = false) => {
                     let aoa = [];
-                    let rowStyles = []; // 각 행의 타입 기록
-                    let grandTotal = 0;
+                    let rowStyles = [];
 
                     regionNames.forEach(rName => {
                         const list = byRegion[rName];
                         if (!list || list.length === 0) return;
 
-                        aoa.push(["", "", rName === "미분류" ? "미분류(지역 미확인)" : rName, "", "", ""]);
+                        aoa.push(["", "", rName === "미분류" ? "미분류(신규확인필요)" : rName, "", "", ""]);
                         rowStyles.push("TITLE");
-                        aoa.push(["", "", "", "", "", ""]);
-                        rowStyles.push("EMPTY");
 
                         aoa.push(["상호", "대표자", "주소", "전화번호", "국산(포)", "미국산(포)"]);
                         rowStyles.push("HEADER");
 
                         let sum = 0;
+                        let usSum = 0;
                         list.forEach(item => {
-                            aoa.push([item.name, item.rep, item.address, item.phone, item.sacks > 0 ? item.sacks : "", item.usSacks || ""]);
+                            aoa.push([
+                                item.name,
+                                item.rep,
+                                item.address,
+                                item.phone,
+                                item.sacks > 0 ? item.sacks : "",
+                                item.usSacks ? item.usSacks : ""
+                            ]);
                             rowStyles.push("DATA");
-                            sum += item.sacks;
+                            sum += (Number(item.sacks) || 0);
+                            usSum += (Number(item.usSacks) || 0);
                         });
 
-                        grandTotal += sum;
-                        aoa.push(["", "", "", "합계", sum, 0]);
+                        aoa.push(["", "", "", "합계", sum, usSum]);
                         rowStyles.push("SUM");
                         aoa.push(["", "", "", "", "", ""]);
                         rowStyles.push("EMPTY");
                     });
 
                     if (includeTotal) {
-                        const totalAll = enrichedData.reduce((acc, cur) => acc + cur.sacks, 0);
-                        aoa.push(["", "", "", "총합", totalAll, 0]);
+                        const totalAll = recoveredData.reduce((acc, cur) => acc + (Number(cur.sacks) || 0), 0);
+                        const totalUsAll = recoveredData.reduce((acc, cur) => acc + (Number(cur.usSacks) || 0), 0);
+                        aoa.push(["", "", "", "전체 총합", totalAll, totalUsAll]);
                         rowStyles.push("SUM");
                     }
 
                     const ws = XLSX.utils.aoa_to_sheet(aoa);
-                    ws['!cols'] = [{ wch: 20 }, { wch: 12 }, { wch: 42 }, { wch: 16 }, { wch: 12 }, { wch: 12 }];
+                    ws['!cols'] = [{ wch: 20 }, { wch: 11 }, { wch: 42 }, { wch: 16 }, { wch: 11 }, { wch: 11 }];
 
-                    // 스타일 입히기
                     const range = XLSX.utils.decode_range(ws['!ref'] || "A1:F1");
                     for (let R = range.s.r; R <= range.e.r; ++R) {
                         const rType = rowStyles[R];
+                        if (!rType || rType === "EMPTY") continue;
                         for (let C = range.s.c; C <= range.e.c; ++C) {
                             const addr = XLSX.utils.encode_cell({ r: R, c: C });
-                            if (!ws[addr]) continue;
+                            if (!ws[addr]) ws[addr] = { t: 's', v: '' };
                             if (rType === "TITLE") ws[addr].s = styleTitle;
                             else if (rType === "HEADER") ws[addr].s = styleHeader;
-                            else if (rType === "DATA") ws[addr].s = (C === 2) ? styleCellLeft : styleCellCenter;
+                            else if (rType === "DATA") {
+                                if (C === 2) ws[addr].s = styleCellLeft;
+                                else if (C === 4) ws[addr].s = styleCellBold;
+                                else ws[addr].s = styleCellCenter;
+                            }
                             else if (rType === "SUM") ws[addr].s = styleSum;
                         }
                     }
@@ -559,19 +695,21 @@
                 const ws2 = buildRegionSheet(["서쪽", "동쪽", "서귀포"], true);
                 XLSX.utils.book_append_sheet(wb, ws2, "최종_서쪽,동쪽,서귀포");
 
-                // 시트 3: 지역분류 데이터 (요청하신 8개 필수 열 완벽 적용!)
-                // 열 구조: 번호 | 상호 | 대표자 | 지역 | 주소 | 전화번호 | 국산(포) | 미국산(포)
+                // 시트 3: 지역분류 데이터 (번호 | 상호 | 대표자 | 지역 | 주소 | 전화번호 | 국산(포) | 미국산(포))
                 const headers3 = ["번호", "상호", "대표자", "지역", "주소", "전화번호", "국산(포)", "미국산(포)"];
                 let aoa3 = [
-                    [`지역 분류 데이터 (수량 기재 ${enrichedData.length}개 업체 - 지역자료 매칭 결과)`, "", "", "", "", "", "", ""],
+                    [`지역 분류 데이터 (배송 대상 총 ${recoveredData.length}개 업체 매칭 결과)`, "", "", "", "", "", "", ""],
                     headers3
                 ];
                 
-                // 지역별로 정렬하여 보기 좋게 수록
                 const regionOrder = { "제주시": 1, "신제주": 2, "서쪽": 3, "동쪽": 4, "서귀포": 5, "미분류": 6 };
-                const sortedForSheet3 = [...enrichedData].sort((a, b) => (regionOrder[a.region] || 9) - (regionOrder[b.region] || 9));
+                const sortedForSheet3 = [...recoveredData].sort((a, b) => (regionOrder[a.region] || 9) - (regionOrder[b.region] || 9));
 
+                let totalKr3 = 0;
+                let totalUs3 = 0;
                 sortedForSheet3.forEach(item => {
+                    totalKr3 += (Number(item.sacks) || 0);
+                    totalUs3 += (Number(item.usSacks) || 0);
                     aoa3.push([
                         item.no,
                         item.name,
@@ -580,26 +718,29 @@
                         item.address,
                         item.phone,
                         item.sacks > 0 ? item.sacks : "",
-                        item.usSacks || ""
+                        item.usSacks ? item.usSacks : ""
                     ]);
                 });
+                aoa3.push(["", "합계", "", "", "", "", totalKr3, totalUs3]);
 
                 const ws3 = XLSX.utils.aoa_to_sheet(aoa3);
-                ws3['!cols'] = [{ wch: 8 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 42 }, { wch: 16 }, { wch: 12 }, { wch: 12 }];
+                ws3['!cols'] = [{ wch: 8 }, { wch: 20 }, { wch: 11 }, { wch: 11 }, { wch: 42 }, { wch: 16 }, { wch: 11 }, { wch: 11 }];
                 
                 const range3 = XLSX.utils.decode_range(ws3['!ref'] || "A1:H1");
                 for (let R = range3.s.r; R <= range3.e.r; ++R) {
                     for (let C = range3.s.c; C <= range3.e.c; ++C) {
                         const addr = XLSX.utils.encode_cell({ r: R, c: C });
-                        if (!ws3[addr]) continue;
+                        if (!ws3[addr]) ws3[addr] = { t: 's', v: '' };
                         if (R === 0) ws3[addr].s = { font: { name: "맑은 고딕", sz: 12, bold: true } };
                         else if (R === 1) ws3[addr].s = styleHeader;
-                        else ws3[addr].s = (C === 4) ? styleCellLeft : styleCellCenter;
+                        else if (R === range3.e.r) ws3[addr].s = styleSum;
+                        else ws3[addr].s = (C === 4) ? styleCellLeft : (C === 6 ? styleCellBold : styleCellCenter);
                     }
                 }
                 XLSX.utils.book_append_sheet(wb, ws3, "지역분류 데이터");
 
                 XLSX.writeFile(wb, `배송분류완료_${processData.month}_${processData.type}.xlsx`);
+                showToast("엑셀 파일 다운로드가 완료되었습니다!");
             };
 
             // 신규 하차지 등록 상태 (주소, 전화번호 입력 추가)
