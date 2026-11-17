@@ -696,8 +696,21 @@
                     }
 
                     const ws = XLSX.utils.aoa_to_sheet(aoa);
-                    // 50pt 폰트가 넉넉히 들어가도록 열 너비와 행 높이 대폭 확대
-                    ws['!cols'] = [{ wch: 70 }, { wch: 36 }, { wch: 135 }, { wch: 62 }, { wch: 38 }, { wch: 38 }];
+                    
+                    // ★ 글자 길이에 맞춰 열 너비 자동 계산 (50pt 폰트 크기에 비례하여 여백 확보)
+                    const colWidths = [18, 12, 45, 25, 18, 18]; // 최소 너비
+                    aoa.forEach(row => {
+                        row.forEach((cell, i) => {
+                            if (cell && typeof cell === 'string') {
+                                // 한글은 더 넓게 계산
+                                const charLen = cell.split('').reduce((a, c) => a + (c.match(/[가-힣]/) ? 2 : 1.2), 0);
+                                const calcWidth = charLen * 3.5; // 50pt 스케일 업
+                                if (calcWidth > colWidths[i]) colWidths[i] = calcWidth;
+                            }
+                        });
+                    });
+                    ws['!cols'] = colWidths.map(w => ({ wch: w }));
+
                     ws['!rows'] = rowStyles.map(rType => {
                         if (rType === "TITLE") return { hpt: 95 };
                         if (rType === "HEADER") return { hpt: 85 };
@@ -705,8 +718,9 @@
                         if (rType === "DATA") return { hpt: 80 };
                         return { hpt: 40 };
                     });
-                    // A4 가로 방향 인쇄 최적화 설정
-                    ws['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
+                    
+                    // ★ 인쇄 시 A4 가로 한 페이지 너비에 꽉 차도록 강제 맞춤 설정 (비율 자동 축소)
+                    ws['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
 
                     const range = XLSX.utils.decode_range(ws['!ref'] || "A1:F1");
                     for (let R = range.s.r; R <= range.e.r; ++R) {
@@ -736,7 +750,7 @@
                 const ws2 = buildRegionSheet(["서쪽", "동쪽", "서귀포"], true);
                 XLSX.utils.book_append_sheet(wb, ws2, "최종_서쪽,동쪽,서귀포");
 
-                // 시트 3: 지역분류 데이터 (번호 | 상호 | 대표자 | 지역 | 주소 | 전화번호 | 국산(포) | 미국산(포))
+                // 시트 3: 지역분류 데이터
                 const headers3 = ["번호", "상호", "대표자", "지역", "주소", "전화번호", "국산(포)", "미국산(포)"];
                 let aoa3 = [
                     [`지역 분류 데이터 (배송 대상 총 ${recoveredData.length}개 업체 매칭 결과)`, "", "", "", "", "", "", ""],
@@ -765,16 +779,29 @@
                 aoa3.push(["", "합계", "", "", "", "", totalKr3, totalUs3 > 0 ? totalUs3 : 0]);
 
                 const ws3 = XLSX.utils.aoa_to_sheet(aoa3);
-                ws3['!cols'] = [{ wch: 26 }, { wch: 70 }, { wch: 36 }, { wch: 34 }, { wch: 135 }, { wch: 62 }, { wch: 38 }, { wch: 38 }];
+                
+                // ★ 시트 3 글자 길이에 맞춰 열 너비 자동 계산
+                const colWidths3 = [15, 20, 15, 15, 45, 25, 18, 18];
+                aoa3.forEach(row => {
+                    row.forEach((cell, i) => {
+                        if (cell && typeof cell === 'string') {
+                            const charLen = cell.split('').reduce((a, c) => a + (c.match(/[가-힣]/) ? 2 : 1.2), 0);
+                            const calcWidth = charLen * 3.5;
+                            if (calcWidth > colWidths3[i]) colWidths3[i] = calcWidth;
+                        }
+                    });
+                });
+                ws3['!cols'] = colWidths3.map(w => ({ wch: w }));
+
                 ws3['!rows'] = aoa3.map((_, idx) => ({ hpt: idx === 0 ? 95 : 80 }));
-                ws3['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
+                ws3['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
                 
                 const range3 = XLSX.utils.decode_range(ws3['!ref'] || "A1:H1");
                 for (let R = range3.s.r; R <= range3.e.r; ++R) {
                     for (let C = range3.s.c; C <= range3.e.c; ++C) {
                         const addr = XLSX.utils.encode_cell({ r: R, c: C });
                         if (!ws3[addr]) ws3[addr] = { t: 's', v: '' };
-                        if (R === 0) ws3[addr].s = { font: { name: "맑은 고딕", sz: 50, bold: true } };
+                        if (R === 0) ws3[addr].s = { font: { name: "맑은 고딕", sz: 50, bold: true }, alignment: { vertical: "center" } };
                         else if (R === 1) ws3[addr].s = styleHeader;
                         else if (R === range3.e.r) ws3[addr].s = styleSum;
                         else ws3[addr].s = (C === 4) ? styleCellLeft : (C === 6 ? styleCellBold : styleCellCenter);
