@@ -255,6 +255,7 @@
 
             const [editingItem, setEditingItem] = useState(null);
             const [editAmountMan, setEditAmountMan] = useState(0);
+            const [deletingItem, setDeletingItem] = useState(null);
 
             const [toast, setToast] = useState(null); 
             const showToast = (message, type = 'success') => {
@@ -262,13 +263,13 @@
                 setTimeout(() => setToast(null), 3500);
             };
 
-            // 1. 사용자님의 Firebase 설정 그대로 유지
+            // 1. 사용자님의 Firebase 설정 그대로 유지 (deleteDoc 추가)
             useEffect(() => {
                 const initFirebase = async () => {
                     try {
                         const { initializeApp, getApps } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js");
                         const { getAuth, signInAnonymously, signInWithCustomToken } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js");
-                        const { getFirestore, doc, setDoc, onSnapshot, collection } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+                        const { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
 
                         const firebaseConfig = {
                             apiKey: "AIzaSyBj8x8nUPrTp9Y2fpaVT3zwFYpQ7XwPNyM",
@@ -282,7 +283,7 @@
                         const auth = getAuth(app);
                         const db = getFirestore(app);
 
-                        setFbApi({ db, doc, setDoc, onSnapshot, collection });
+                        setFbApi({ db, doc, setDoc, deleteDoc, onSnapshot, collection });
 
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                             await signInWithCustomToken(auth, __initial_auth_token);
@@ -345,7 +346,7 @@
 
             useEffect(() => {
                 lucide.createIcons();
-            }, [activeTab, pendingFile, toast, currentProcess]);
+            }, [activeTab, pendingFile, toast, currentProcess, editingItem, deletingItem]);
 
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
@@ -518,7 +519,33 @@
                 }
             };
 
-            // 4. 10월 원본 양식과 100% 동일한 고품질 엑셀 생성 함수 (테두리, 색상, 열너비 완벽 적용)
+            const confirmDeleteHistory = async () => {
+                if (!deletingItem) return;
+                if (user && fbApi && fbApi.deleteDoc) {
+                    try {
+                        const { db, doc, deleteDoc } = fbApi;
+                        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', deletingItem.id);
+                        await deleteDoc(docRef);
+                        if (currentProcess && currentProcess.id === deletingItem.id) {
+                            setCurrentProcess(null);
+                        }
+                        setDeletingItem(null);
+                        showToast("내역이 삭제되었습니다.");
+                    } catch (err) {
+                        console.error("Delete error:", err);
+                        showToast("삭제 중 오류가 발생했습니다.", "error");
+                    }
+                } else {
+                    setHistory(prev => prev.filter(h => h.id !== deletingItem.id));
+                    if (currentProcess && currentProcess.id === deletingItem.id) {
+                        setCurrentProcess(null);
+                    }
+                    setDeletingItem(null);
+                    showToast("내역이 삭제되었습니다.");
+                }
+            };
+
+            // 4. A4 용지 출력 시 한눈에 보이도록 초대형 폰트(50pt) 및 행 높이/열 너비 대폭 확대 적용
             const downloadExcel = (processData) => {
                 if (!processData || !processData.data) {
                     showToast("다운로드할 데이터가 없습니다.", "error");
@@ -535,12 +562,9 @@
                     let origNo = item.no || (idx + 1);
                     let phoneFromRow = "";
 
-                    // 만약 이전 버그로 인해 sacks가 0으로 저장되어 있다면 originalRow에서 구출
                     if (sacks === 0 && item.originalRow && Array.isArray(item.originalRow)) {
                         const r = item.originalRow;
                         if (r[0] && !isNaN(parseInt(r[0]))) origNo = r[0];
-                        // 쌀 양식: [번호, 상호, 대표자, 국산쌀(포), 쌀수량(kg)...] -> index 3이 포수
-                        // 팥 양식: [번호, 코드, 상호, 대표자, 25kg(포), 팥수량, 전화번호] -> index 4가 포수
                         const cand3 = parseInt(String(r[3] || "0").replace(/[^0-9]/g, ''), 10) || 0;
                         const cand4 = parseInt(String(r[4] || "0").replace(/[^0-9]/g, ''), 10) || 0;
                         if (cand3 > 0 && cand3 < 1000) sacks = cand3;
@@ -551,10 +575,17 @@
                         });
                     }
 
-                    // 수량이 있는 실제 배송 업체만 담기
                     if (sacks > 0 || usSacks > 0) {
                         const cleanName = String(item.name).trim();
-                        const master = masterData[cleanName] || {};
+                        // 띄어쓰기 무시 매칭 보조
+                        const noSpaceName = cleanName.replace(/\s+/g, "");
+                        let master = masterData[cleanName];
+                        if (!master) {
+                            const foundKey = Object.keys(masterData).find(k => k.replace(/\s+/g, "") === noSpaceName);
+                            if (foundKey) master = masterData[foundKey];
+                        }
+                        master = master || {};
+
                         recoveredData.push({
                             no: origNo,
                             name: cleanName,
@@ -579,48 +610,48 @@
                     else byRegion["미분류"].push(item);
                 });
 
-                // 엑셀 셀 스타일 정의
-                const borderThin = {
-                    top: { style: "thin", color: { rgb: "CBD5E1" } },
-                    bottom: { style: "thin", color: { rgb: "CBD5E1" } },
-                    left: { style: "thin", color: { rgb: "CBD5E1" } },
-                    right: { style: "thin", color: { rgb: "CBD5E1" } }
+                // A4 출력용 굵은 테두리 및 초대형 폰트(50pt 기준) 스타일 정의
+                const borderThick = {
+                    top: { style: "medium", color: { rgb: "000000" } },
+                    bottom: { style: "medium", color: { rgb: "000000" } },
+                    left: { style: "medium", color: { rgb: "000000" } },
+                    right: { style: "medium", color: { rgb: "000000" } }
                 };
                 const styleHeader = {
-                    font: { name: "맑은 고딕", sz: 11, bold: true, color: { rgb: "FFFFFF" } },
-                    fill: { fgColor: { rgb: "3B82F6" } },
-                    alignment: { horizontal: "center", vertical: "center" },
-                    border: borderThin
+                    font: { name: "맑은 고딕", sz: 48, bold: true, color: { rgb: "FFFFFF" } },
+                    fill: { fgColor: { rgb: "1E3A8A" } },
+                    alignment: { horizontal: "center", vertical: "center", wrapText: true },
+                    border: borderThick
                 };
                 const styleTitle = {
-                    font: { name: "맑은 고딕", sz: 13, bold: true, color: { rgb: "0F172A" } },
-                    fill: { fgColor: { rgb: "E2E8F0" } },
+                    font: { name: "맑은 고딕", sz: 55, bold: true, color: { rgb: "0F172A" } },
+                    fill: { fgColor: { rgb: "CBD5E1" } },
                     alignment: { horizontal: "center", vertical: "center" },
-                    border: borderThin
+                    border: borderThick
                 };
                 const styleCellCenter = {
-                    font: { name: "맑은 고딕", sz: 10, color: { rgb: "1E293B" } },
-                    alignment: { horizontal: "center", vertical: "center" },
-                    border: borderThin
+                    font: { name: "맑은 고딕", sz: 48, bold: false, color: { rgb: "000000" } },
+                    alignment: { horizontal: "center", vertical: "center", wrapText: true },
+                    border: borderThick
                 };
                 const styleCellLeft = {
-                    font: { name: "맑은 고딕", sz: 10, color: { rgb: "1E293B" } },
-                    alignment: { horizontal: "left", vertical: "center" },
-                    border: borderThin
+                    font: { name: "맑은 고딕", sz: 44, bold: false, color: { rgb: "000000" } },
+                    alignment: { horizontal: "left", vertical: "center", wrapText: true },
+                    border: borderThick
                 };
                 const styleCellBold = {
-                    font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "1E40AF" } },
+                    font: { name: "맑은 고딕", sz: 52, bold: true, color: { rgb: "B91C1C" } },
                     alignment: { horizontal: "center", vertical: "center" },
-                    border: borderThin
+                    border: borderThick
                 };
                 const styleSum = {
-                    font: { name: "맑은 고딕", sz: 11, bold: true, color: { rgb: "0F172A" } },
-                    fill: { fgColor: { rgb: "FEF3C7" } },
+                    font: { name: "맑은 고딕", sz: 52, bold: true, color: { rgb: "000000" } },
+                    fill: { fgColor: { rgb: "FDE047" } },
                     alignment: { horizontal: "center", vertical: "center" },
-                    border: borderThin
+                    border: borderThick
                 };
 
-                // 시트 1, 2용 블록 생성기 (10월 양식: 상호, 대표자, 주소, 전화번호, 국산(포), 미국산(포))
+                // 시트 1, 2용 블록 생성기 (상호, 대표자, 주소, 전화번호, 국산(포), 미국산(포))
                 const buildRegionSheet = (regionNames, includeTotal = false) => {
                     let aoa = [];
                     let rowStyles = [];
@@ -651,7 +682,7 @@
                             usSum += (Number(item.usSacks) || 0);
                         });
 
-                        aoa.push(["", "", "", "합계", sum, usSum]);
+                        aoa.push(["", "", "", "합계", sum, usSum > 0 ? usSum : 0]);
                         rowStyles.push("SUM");
                         aoa.push(["", "", "", "", "", ""]);
                         rowStyles.push("EMPTY");
@@ -660,12 +691,22 @@
                     if (includeTotal) {
                         const totalAll = recoveredData.reduce((acc, cur) => acc + (Number(cur.sacks) || 0), 0);
                         const totalUsAll = recoveredData.reduce((acc, cur) => acc + (Number(cur.usSacks) || 0), 0);
-                        aoa.push(["", "", "", "전체 총합", totalAll, totalUsAll]);
+                        aoa.push(["", "", "", "총합", totalAll, totalUsAll > 0 ? totalUsAll : 0]);
                         rowStyles.push("SUM");
                     }
 
                     const ws = XLSX.utils.aoa_to_sheet(aoa);
-                    ws['!cols'] = [{ wch: 20 }, { wch: 11 }, { wch: 42 }, { wch: 16 }, { wch: 11 }, { wch: 11 }];
+                    // 50pt 폰트가 넉넉히 들어가도록 열 너비와 행 높이 대폭 확대
+                    ws['!cols'] = [{ wch: 70 }, { wch: 36 }, { wch: 135 }, { wch: 62 }, { wch: 38 }, { wch: 38 }];
+                    ws['!rows'] = rowStyles.map(rType => {
+                        if (rType === "TITLE") return { hpt: 95 };
+                        if (rType === "HEADER") return { hpt: 85 };
+                        if (rType === "SUM") return { hpt: 85 };
+                        if (rType === "DATA") return { hpt: 80 };
+                        return { hpt: 40 };
+                    });
+                    // A4 가로 방향 인쇄 최적화 설정
+                    ws['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
 
                     const range = XLSX.utils.decode_range(ws['!ref'] || "A1:F1");
                     for (let R = range.s.r; R <= range.e.r; ++R) {
@@ -721,17 +762,19 @@
                         item.usSacks ? item.usSacks : ""
                     ]);
                 });
-                aoa3.push(["", "합계", "", "", "", "", totalKr3, totalUs3]);
+                aoa3.push(["", "합계", "", "", "", "", totalKr3, totalUs3 > 0 ? totalUs3 : 0]);
 
                 const ws3 = XLSX.utils.aoa_to_sheet(aoa3);
-                ws3['!cols'] = [{ wch: 8 }, { wch: 20 }, { wch: 11 }, { wch: 11 }, { wch: 42 }, { wch: 16 }, { wch: 11 }, { wch: 11 }];
+                ws3['!cols'] = [{ wch: 26 }, { wch: 70 }, { wch: 36 }, { wch: 34 }, { wch: 135 }, { wch: 62 }, { wch: 38 }, { wch: 38 }];
+                ws3['!rows'] = aoa3.map((_, idx) => ({ hpt: idx === 0 ? 95 : 80 }));
+                ws3['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
                 
                 const range3 = XLSX.utils.decode_range(ws3['!ref'] || "A1:H1");
                 for (let R = range3.s.r; R <= range3.e.r; ++R) {
                     for (let C = range3.s.c; C <= range3.e.c; ++C) {
                         const addr = XLSX.utils.encode_cell({ r: R, c: C });
                         if (!ws3[addr]) ws3[addr] = { t: 's', v: '' };
-                        if (R === 0) ws3[addr].s = { font: { name: "맑은 고딕", sz: 12, bold: true } };
+                        if (R === 0) ws3[addr].s = { font: { name: "맑은 고딕", sz: 50, bold: true } };
                         else if (R === 1) ws3[addr].s = styleHeader;
                         else if (R === range3.e.r) ws3[addr].s = styleSum;
                         else ws3[addr].s = (C === 4) ? styleCellLeft : (C === 6 ? styleCellBold : styleCellCenter);
@@ -740,7 +783,7 @@
                 XLSX.utils.book_append_sheet(wb, ws3, "지역분류 데이터");
 
                 XLSX.writeFile(wb, `배송분류완료_${processData.month}_${processData.type}.xlsx`);
-                showToast("엑셀 파일 다운로드가 완료되었습니다!");
+                showToast("50pt 초대형 폰트 엑셀 다운로드 완료!");
             };
 
             // 신규 하차지 등록 상태 (주소, 전화번호 입력 추가)
@@ -901,6 +944,25 @@
                         </div>
                     )}
 
+                    {/* 내역 삭제 확인 팝업 */}
+                    {deletingItem && (
+                        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-[28px] w-full max-w-sm overflow-hidden shadow-2xl p-6 text-center">
+                                <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center mx-auto mb-3">
+                                    <Icon name="trash-2" />
+                                </div>
+                                <h3 className="text-lg font-extrabold text-slate-800">내역을 삭제할까요?</h3>
+                                <p className="text-xs text-slate-400 mt-1 mb-5">
+                                    <span className="font-bold text-slate-600">{deletingItem.month} ({deletingItem.type})</span> 내역이 영구 삭제되며<br/>통계에서도 제외됩니다.
+                                </p>
+                                <div className="flex gap-2">
+                                    <button type="button" onClick={() => setDeletingItem(null)} className="flex-1 py-3 text-xs font-bold text-slate-500 bg-slate-100 rounded-full">취소</button>
+                                    <button type="button" onClick={confirmDeleteHistory} className="flex-1 py-3 text-xs font-bold text-white bg-rose-500 hover:bg-rose-600 rounded-full shadow-md shadow-rose-200 active:scale-95">삭제하기</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* 상단 헤더 */}
                     <header className="bg-white/90 backdrop-blur-md text-slate-800 px-5 py-3.5 font-extrabold text-base flex items-center justify-between sticky top-0 z-20 border-b border-slate-100">
                         <div className="flex items-center space-x-2">
@@ -1031,15 +1093,18 @@
                                                 </div>
                                             </div>
                                             
-                                            <div className="grid grid-cols-3 gap-1.5 pt-2.5 border-t border-slate-50">
+                                            <div className="grid grid-cols-4 gap-1.5 pt-2.5 border-t border-slate-50">
                                                 <button onClick={() => { setCurrentProcess(item); setActiveTab('upload'); }} className="bg-slate-50 text-slate-600 text-xs py-2.5 rounded-full font-bold active:scale-95">
-                                                    요약 보기
+                                                    요약
                                                 </button>
                                                 <button onClick={() => { setEditingItem(item); setEditAmountMan((item.expectedAmount || 0) / 10000); }} className="bg-amber-50 text-amber-800 text-xs py-2.5 rounded-full font-bold active:scale-95">
-                                                    금액 수정
+                                                    금액수정
                                                 </button>
                                                 <button onClick={() => downloadExcel(item)} className="bg-blue-50 text-blue-600 text-xs py-2.5 rounded-full font-bold active:scale-95">
-                                                    엑셀 다운
+                                                    엑셀다운
+                                                </button>
+                                                <button onClick={() => setDeletingItem(item)} className="bg-rose-50 text-rose-600 text-xs py-2.5 rounded-full font-bold active:scale-95">
+                                                    삭제
                                                 </button>
                                             </div>
                                         </div>
