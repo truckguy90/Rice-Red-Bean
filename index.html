@@ -11,7 +11,7 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- SheetJS with Style (양식/테두리/색상 지원 버전) -->
+    <!-- SheetJS with Style (양식/테두리/색상/인쇄영역 지원 버전) -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -19,17 +19,17 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif; background-color: #eef2f6; color: #1e293b; margin: 0; padding: 0; overflow-x: hidden; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif; background-color: #e6dfd5; color: #292524; margin: 0; padding: 0; overflow-x: hidden; }
         
-        /* 모바일 친화적 컨테이너 및 하단 버튼 가림 완벽 방지 */
-        .app-container { max-width: 480px; margin: 0 auto; background-color: #f8fafc; min-height: 100dvh; display: flex; flex-direction: column; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05); position: relative; }
+        /* 모바일 친화적 오트/베이지 톤 컨테이너 및 하단 버튼 가림 완벽 방지 */
+        .app-container { max-width: 480px; margin: 0 auto; background-color: #f7f4ef; min-height: 100dvh; display: flex; flex-direction: column; box-shadow: 0 20px 25px -5px rgba(41, 37, 36, 0.06); position: relative; }
         .content-area { flex: 1; overflow-y: auto; padding: 16px; padding-bottom: 160px; }
         
-        /* 플로팅 하단 네비게이션 */
-        .bottom-nav-container { position: fixed; bottom: 0; left: 0; right: 0; width: 100%; max-width: 480px; margin: 0 auto; padding: 12px 16px 20px 16px; background: linear-gradient(to top, rgba(248,250,252,1) 60%, rgba(248,250,252,0)); z-index: 40; pointer-events: none; }
-        .bottom-nav { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(226, 232, 240, 0.9); border-radius: 9999px; display: flex; justify-content: space-around; padding: 6px 8px; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12); pointer-events: auto; }
-        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: #94a3b8; cursor: pointer; flex: 1; padding: 8px 0; border-radius: 9999px; transition: all 0.2s ease; }
-        .nav-item.active { color: #2563eb; font-weight: 800; background-color: #eff6ff; }
+        /* 플로팅 하단 네비게이션 (오트 베이지 테마) */
+        .bottom-nav-container { position: fixed; bottom: 0; left: 0; right: 0; width: 100%; max-width: 480px; margin: 0 auto; padding: 12px 16px 20px 16px; background: linear-gradient(to top, rgba(247,244,239,1) 60%, rgba(247,244,239,0)); z-index: 40; pointer-events: none; }
+        .bottom-nav { background: rgba(255, 253, 250, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(214, 206, 194, 0.8); border-radius: 9999px; display: flex; justify-content: space-around; padding: 6px 8px; box-shadow: 0 10px 25px -5px rgba(68, 64, 60, 0.1); pointer-events: auto; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: #a8a29e; cursor: pointer; flex: 1; padding: 8px 0; border-radius: 9999px; transition: all 0.2s ease; }
+        .nav-item.active { color: #57534e; font-weight: 800; background-color: #ede8df; }
         .nav-item i { margin-bottom: 3px; }
         
         .file-input-wrapper { position: relative; overflow: hidden; display: block; width: 100%; cursor: pointer; }
@@ -49,29 +49,51 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
+        // 길쭉한 주름을 제거하고 동글동글하게 다듬은 정통 짚가마니(쌀) 그래픽
         const RiceChar = ({ className = "w-16 h-16" }) => (
             <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
-                <ellipse cx="50" cy="92" rx="28" ry="4" fill="#000000" fillOpacity="0.06"/>
-                <path d="M35 24 C30 14 22 15 26 9 C32 4 42 12 50 12 C58 12 68 4 74 9 C78 15 70 14 65 24 Z" fill="#FDE68A" stroke="#D97706" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M31 23 C18 35 16 62 20 80 C22 89 34 91 50 91 C66 91 78 89 80 80 C84 62 82 35 69 23 Z" fill="#FFFBEB" stroke="#D97706" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M29 24 C40 28 60 28 71 24" stroke="#B45309" strokeWidth="4.5" strokeLinecap="round"/>
-                <rect x="33" y="42" width="34" height="34" rx="12" fill="#FDE68A" stroke="#F59E0B" strokeWidth="2"/>
-                <text x="50" y="65" fontSize="20" fontWeight="900" fill="#B45309" textAnchor="middle" style={{fontFamily: 'Pretendard, sans-serif'}}>쌀</text>
+                <ellipse cx="50" cy="86" rx="36" ry="6" fill="#000000" fillOpacity="0.07"/>
+                {/* 가마니 본체 (상단 돌출부 없이 매끈하고 둥근 쿠션 형태) */}
+                <path d="M14 54 C14 30 30 22 50 22 C70 22 86 30 86 54 C86 76 70 84 50 84 C30 84 14 76 14 54 Z" fill="#E6C280" stroke="#8C6239" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
+                {/* 가마니 옆면 입체 라인 */}
+                <path d="M16 56 C30 65 70 65 84 56" stroke="#A67C52" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="3 3"/>
+                {/* 세로 짚신 밧줄 (위아래로 튀어나오지 않게 본체 라인에 딱 맞춤) */}
+                <path d="M34 24 C29 44 29 64 34 82" stroke="#C69C6D" strokeWidth="4.5" strokeLinecap="round"/>
+                <path d="M34 24 C29 44 29 64 34 82" stroke="#754C24" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="2 3"/>
+                <path d="M66 24 C71 44 71 64 66 82" stroke="#C69C6D" strokeWidth="4.5" strokeLinecap="round"/>
+                <path d="M66 24 C71 44 71 64 66 82" stroke="#754C24" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="2 3"/>
+                {/* 가로 짚신 밧줄 */}
+                <path d="M17 42 C38 37 62 37 83 42" stroke="#C69C6D" strokeWidth="4" strokeLinecap="round"/>
+                <path d="M17 66 C38 71 62 71 83 66" stroke="#C69C6D" strokeWidth="4" strokeLinecap="round"/>
+                {/* 중앙 쌀 라벨 (오트/베이지 톤) */}
+                <rect x="33" y="37" width="34" height="32" rx="10" fill="#FFFDF9" stroke="#8C6239" strokeWidth="2.5"/>
+                <text x="50" y="59" fontSize="19" fontWeight="900" fill="#5C3D1E" textAnchor="middle" style={{fontFamily: 'Pretendard, sans-serif'}}>쌀</text>
             </svg>
         );
 
+        // 길쭉한 주름을 제거하고 동글동글하게 다듬은 정통 짚가마니(팥) 그래픽
         const BeanChar = ({ className = "w-16 h-16" }) => (
             <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
-                <ellipse cx="50" cy="92" rx="28" ry="4" fill="#000000" fillOpacity="0.06"/>
-                <path d="M35 24 C30 14 22 15 26 9 C32 4 42 12 50 12 C58 12 68 4 74 9 C78 15 70 14 65 24 Z" fill="#FECDD3" stroke="#9F1239" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M31 23 C18 35 16 62 20 80 C22 89 34 91 50 91 C66 91 78 89 80 80 C84 62 82 35 69 23 Z" fill="#FFF1F2" stroke="#9F1239" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M29 24 C40 28 60 28 71 24" stroke="#881337" strokeWidth="4.5" strokeLinecap="round"/>
-                <rect x="33" y="42" width="34" height="34" rx="12" fill="#FECDD3" stroke="#F43F5E" strokeWidth="2"/>
-                <text x="50" y="65" fontSize="20" fontWeight="900" fill="#9F1239" textAnchor="middle" style={{fontFamily: 'Pretendard, sans-serif'}}>팥</text>
+                <ellipse cx="50" cy="86" rx="36" ry="6" fill="#000000" fillOpacity="0.07"/>
+                {/* 가마니 본체 (상단 돌출부 없이 매끈하고 둥근 쿠션 형태) */}
+                <path d="M14 54 C14 30 30 22 50 22 C70 22 86 30 86 54 C86 76 70 84 50 84 C30 84 14 76 14 54 Z" fill="#DFB6B2" stroke="#7A2E38" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/>
+                {/* 가마니 옆면 입체 라인 */}
+                <path d="M16 56 C30 65 70 65 84 56" stroke="#A35C66" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="3 3"/>
+                {/* 세로 짚신 밧줄 */}
+                <path d="M34 24 C29 44 29 64 34 82" stroke="#C98A94" strokeWidth="4.5" strokeLinecap="round"/>
+                <path d="M34 24 C29 44 29 64 34 82" stroke="#5E1D27" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="2 3"/>
+                <path d="M66 24 C71 44 71 64 66 82" stroke="#C98A94" strokeWidth="4.5" strokeLinecap="round"/>
+                <path d="M66 24 C71 44 71 64 66 82" stroke="#5E1D27" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="2 3"/>
+                {/* 가로 짚신 밧줄 */}
+                <path d="M17 42 C38 37 62 37 83 42" stroke="#C98A94" strokeWidth="4" strokeLinecap="round"/>
+                <path d="M17 66 C38 71 62 71 83 66" stroke="#C98A94" strokeWidth="4" strokeLinecap="round"/>
+                {/* 중앙 팥 라벨 */}
+                <rect x="33" y="37" width="34" height="32" rx="10" fill="#FFFDF9" stroke="#7A2E38" strokeWidth="2.5"/>
+                <text x="50" y="59" fontSize="19" fontWeight="900" fill="#7A2E38" textAnchor="middle" style={{fontFamily: 'Pretendard, sans-serif'}}>팥</text>
             </svg>
         );
 
-        // 10월 데이터 기준: 상호, 지역, 주소, 전화번호 마스터 데이터 완벽 구축
+        // 10월 & 11월 데이터 기준: 상호, 지역, 주소, 전화번호 마스터 데이터 완벽 구축
         const initialMasterData = {
             "건입떡집": { region: "제주시", address: "제주시 건입동", phone: "010-9487-5889" },
             "고향떡집": { region: "제주시", address: "제주시", phone: "010-6693-3160" },
@@ -216,17 +238,17 @@
             "혜성떡방아": { region: "서귀포", address: "서귀포시", phone: "010-3119-7189" }
         };
 
-        const Icon = ({ name }) => {
+        const Icon = ({ name, className = "w-5 h-5" }) => {
             const iconRef = useRef(null);
             useEffect(() => {
                 if (iconRef.current) {
                     lucide.createIcons({
                         icons: { [name]: lucide.icons[name] },
                         nameAttr: 'data-lucide',
-                        attrs: { class: "w-5 h-5" }
+                        attrs: { class: className }
                     });
                 }
-            }, [name]);
+            }, [name, className]);
             return <i ref={iconRef} data-lucide={name}></i>;
         };
 
@@ -251,7 +273,7 @@
             
             const [filterMonth, setFilterMonth] = useState('ALL');
             const [filterType, setFilterType] = useState('전체');
-            const [historyTab, setHistoryTab] = useState('쌀');
+            const [historyTab, setHistoryTab] = useState('전체'); // 블로그 레퍼런스처럼 전체/쌀/팥 3단 뷰 지원
 
             const [editingItem, setEditingItem] = useState(null);
             const [editAmountMan, setEditAmountMan] = useState(0);
@@ -263,7 +285,7 @@
                 setTimeout(() => setToast(null), 3500);
             };
 
-            // 1. 사용자님의 Firebase 설정 그대로 유지 (deleteDoc 추가)
+            // 1. Firebase 초기화
             useEffect(() => {
                 const initFirebase = async () => {
                     try {
@@ -298,7 +320,7 @@
                 initFirebase();
             }, []);
 
-            // 2. 하차지(주소, 전화번호 포함) 클라우드 동기화
+            // 2. 하차지 클라우드 동기화
             useEffect(() => {
                 if (!user || !fbApi) return;
                 const { db, collection, onSnapshot, doc, setDoc } = fbApi;
@@ -314,7 +336,6 @@
                         snapshot.forEach(docSnap => {
                             const d = docSnap.data();
                             const key = docSnap.id;
-                            // 기존에 지역만 저장된 데이터와 호환되며 주소/전화번호 유지
                             merged[key] = {
                                 region: d.region || (merged[key] ? merged[key].region : "미분류"),
                                 address: d.address || (merged[key] ? merged[key].address : ""),
@@ -346,7 +367,7 @@
 
             useEffect(() => {
                 lucide.createIcons();
-            }, [activeTab, pendingFile, toast, currentProcess, editingItem, deletingItem]);
+            }, [activeTab, pendingFile, toast, currentProcess, editingItem, deletingItem, historyTab]);
 
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
@@ -357,10 +378,11 @@
                     const bstr = evt.target.result;
                     const wb = XLSX.read(bstr, { type: 'binary' });
                     
-                    // ★ 수정: '지역분류 데이터' 시트(전체 목록)가 있으면 우선적으로 읽고, 없으면 첫 번째 시트를 읽습니다.
+                    // 완성본 엑셀을 다시 올렸을 때도 전체 목록을 읽도록 '지역분류 데이터' 시트 우선 탐색
                     let targetSheetName = wb.SheetNames[0];
-                    if (wb.SheetNames.includes("지역분류 데이터")) {
-                        targetSheetName = "지역분류 데이터";
+                    const masterSheet = wb.SheetNames.find(n => n.replace(/\s+/g, "").includes("지역분류"));
+                    if (masterSheet) {
+                        targetSheetName = masterSheet;
                     }
                     const ws = wb.Sheets[targetSheetName];
                     const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
@@ -396,7 +418,6 @@
                                 else if (cleanVal.includes("대표자")) colMap.rep = idx;
                                 else if (cleanVal.includes("주소")) colMap.address = idx;
                                 else if (cleanVal.includes("전화")) colMap.phone = idx;
-                                // 미국산(포)가 국산(포)를 덮어쓰지 못하도록 엄격히 분리!
                                 else if (cleanVal.includes("미국산") && (cleanVal.includes("포") || !cleanVal.includes("kg"))) colMap.usSack = idx;
                                 else if ((cleanVal.includes("국산") || cleanVal.includes("25kg") || cleanVal.includes("포")) && !cleanVal.includes("미국산") && !cleanVal.includes("kg")) {
                                     if (colMap.krSack === undefined) colMap.krSack = idx;
@@ -412,7 +433,6 @@
                     return;
                 }
 
-                // 만약 수량 열을 못 찾았다면 대표자 바로 다음 열을 기본 수량 열로 지정
                 if (colMap.krSack === undefined) {
                     colMap.krSack = colMap.rep !== undefined ? colMap.rep + 1 : 3;
                 }
@@ -439,10 +459,16 @@
                     const rawUs = colMap.usSack !== undefined ? row[colMap.usSack] : 0;
                     const usSacks = parseInt(String(rawUs || "0").replace(/[^0-9]/g, ''), 10) || 0;
                     
-                    // 수량이 아예 없는(0포) 업체는 제외
+                    // 수량이 0인 업체는 제외
                     if (sacks === 0 && usSacks === 0) continue;
 
-                    const master = masterData[cleanName];
+                    const noSpaceName = cleanName.replace(/\s+/g, "");
+                    let master = masterData[cleanName];
+                    if (!master) {
+                        const foundKey = Object.keys(masterData).find(k => k.replace(/\s+/g, "") === noSpaceName);
+                        if (foundKey) master = masterData[foundKey];
+                    }
+
                     let region = master ? master.region : "미분류";
                     let address = (master && master.address) ? master.address : (colMap.address !== undefined && row[colMap.address] ? String(row[colMap.address]).trim() : "");
                     let phone = (master && master.phone) ? master.phone : (colMap.phone !== undefined && row[colMap.phone] ? String(row[colMap.phone]).trim() : "");
@@ -467,7 +493,7 @@
                 }
 
                 if (parsedList.length === 0) {
-                    showToast("추출된 배송 업체가 0곳입니다. 엑셀의 수량 데이터를 확인해주세요.", "error");
+                    showToast("추출된 배송 업체가 0곳입니다. 수량 열을 확인해주세요.", "error");
                     return;
                 }
 
@@ -490,9 +516,8 @@
                     const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', docId);
                     setDoc(docRef, newHistory).then(() => {
                         setCurrentProcess({...newHistory, id: docId});
-                        setHistoryTab(targetType);
                         if (unclassifiedCount > 0) {
-                            showToast(`총 ${parsedList.length}곳 (${totalSacks}포) 분류! 미분류 ${unclassifiedCount}곳 있음`, "error");
+                            showToast(`총 ${parsedList.length}곳 (${totalSacks}포) 분류! 미분류 ${unclassifiedCount}곳 확인필요`, "error");
                         } else {
                             showToast(`총 ${parsedList.length}곳 (${totalSacks}포) 완벽 분류 완료!`);
                         }
@@ -502,7 +527,7 @@
                     });
                 } else {
                     setCurrentProcess(newHistory);
-                    showToast(`임시 분류 완료: ${parsedList.length}곳 (${totalSacks}포)`, "success");
+                    showToast(`분류 완료: ${parsedList.length}곳 (${totalSacks}포)`, "success");
                 }
             };
 
@@ -550,7 +575,7 @@
                 }
             };
 
-            // 4. A4 용지 출력 시 한눈에 보이도록 초대형 폰트(50pt) 및 행 높이/열 너비 대폭 확대 적용
+            // ★ 4. A4 용지 1장에 시트1 전체 내용이 들어가도록 인쇄 영역 세팅 & 50pt 폰트/셀 자동 크기 맞춤
             const downloadExcel = (processData) => {
                 if (!processData || !processData.data) {
                     showToast("다운로드할 데이터가 없습니다.", "error");
@@ -559,7 +584,6 @@
 
                 const wb = XLSX.utils.book_new();
                 
-                // 구버전 내역(수량이 0으로 잘못 저장된 내역)도 originalRow에서 수량을 강제 복구!
                 const recoveredData = [];
                 processData.data.forEach((item, idx) => {
                     let sacks = Number(item.sacks) || 0;
@@ -582,7 +606,6 @@
 
                     if (sacks > 0 || usSacks > 0) {
                         const cleanName = String(item.name).trim();
-                        // 띄어쓰기 무시 매칭 보조
                         const noSpaceName = cleanName.replace(/\s+/g, "");
                         let master = masterData[cleanName];
                         if (!master) {
@@ -615,7 +638,6 @@
                     else byRegion["미분류"].push(item);
                 });
 
-                // A4 출력용 굵은 테두리 및 초대형 폰트(50pt 기준) 스타일 정의
                 const borderThick = {
                     top: { style: "medium", color: { rgb: "000000" } },
                     bottom: { style: "medium", color: { rgb: "000000" } },
@@ -625,7 +647,7 @@
                 const styleHeader = {
                     font: { name: "맑은 고딕", sz: 48, bold: true, color: { rgb: "FFFFFF" } },
                     fill: { fgColor: { rgb: "1E3A8A" } },
-                    alignment: { horizontal: "center", vertical: "center", wrapText: true },
+                    alignment: { horizontal: "center", vertical: "center", wrapText: false },
                     border: borderThick
                 };
                 const styleTitle = {
@@ -636,12 +658,12 @@
                 };
                 const styleCellCenter = {
                     font: { name: "맑은 고딕", sz: 48, bold: false, color: { rgb: "000000" } },
-                    alignment: { horizontal: "center", vertical: "center", wrapText: true },
+                    alignment: { horizontal: "center", vertical: "center", wrapText: false },
                     border: borderThick
                 };
                 const styleCellLeft = {
                     font: { name: "맑은 고딕", sz: 44, bold: false, color: { rgb: "000000" } },
-                    alignment: { horizontal: "left", vertical: "center", wrapText: true },
+                    alignment: { horizontal: "left", vertical: "center", wrapText: false },
                     border: borderThick
                 };
                 const styleCellBold = {
@@ -656,7 +678,41 @@
                     border: borderThick
                 };
 
-                // 시트 1, 2용 블록 생성기 (상호, 대표자, 주소, 전화번호, 국산(포), 미국산(포))
+                // 글자 크기에 맞춰 셀 너비를 타이트하고 정확하게 자동 계산하는 함수
+                const applyAutoFitAndPageSetup = (ws, aoa, minWidths, fitOnePage = true) => {
+                    const colWidths = [...minWidths];
+                    aoa.forEach((row) => {
+                        if (!row) return;
+                        // 첫 줄이 긴 제목인 경우 너비 계산 왜곡 방지
+                        if (row[0] && String(row[0]).includes("지역 분류 데이터")) return;
+                        row.forEach((cell, i) => {
+                            if (cell !== null && cell !== undefined && colWidths[i] !== undefined) {
+                                const str = String(cell).trim();
+                                if (!str) return;
+                                let visualLen = 0;
+                                for (let ch of str) {
+                                    visualLen += /[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(ch) ? 2.0 : 1.1;
+                                }
+                                // 50pt 폰트 비율에 맞춰 글자가 잘리지 않도록 타이트하게 스케일링
+                                const calcWidth = Math.ceil(visualLen * 4.2) + 6;
+                                if (calcWidth > colWidths[i]) colWidths[i] = calcWidth;
+                            }
+                        });
+                    });
+                    ws['!cols'] = colWidths.map(w => ({ wch: w }));
+
+                    // ★ 핵심: 엑셀 인쇄 시 무조건 A4 1페이지 안에 가로·세로 모두 들어가도록 강제 세팅
+                    ws['!fitToPage'] = true;
+                    ws['!pageSetup'] = {
+                        paperSize: 9, // A4 용지
+                        orientation: 'portrait', // 세로 방향
+                        fitToPage: true,
+                        fitToWidth: 1,
+                        fitToHeight: fitOnePage ? 1 : 0
+                    };
+                    ws['!margins'] = { left: 0.2, right: 0.2, top: 0.25, bottom: 0.25, header: 0.1, footer: 0.1 };
+                };
+
                 const buildRegionSheet = (regionNames, includeTotal = false) => {
                     let aoa = [];
                     let rowStyles = [];
@@ -702,14 +758,13 @@
 
                     const ws = XLSX.utils.aoa_to_sheet(aoa);
                     
-                    // ★ 글자 길이에 맞춰 열 너비 자동 계산 (50pt 폰트 크기에 비례하여 여백 확보)
-                    const colWidths = [18, 12, 45, 25, 18, 18]; // 최소 너비
+                    // ★ 글자 길이에 맞춰 열 너비 자동 계산 (A4 1장 안에 알맞게 들어가도록 타이트하게 조정)
+                    const colWidths = [16, 12, 36, 22, 14, 14]; 
                     aoa.forEach(row => {
                         row.forEach((cell, i) => {
                             if (cell && typeof cell === 'string') {
-                                // 한글은 더 넓게 계산
-                                const charLen = cell.split('').reduce((a, c) => a + (c.match(/[가-힣]/) ? 2 : 1.2), 0);
-                                const calcWidth = charLen * 3.5; // 50pt 스케일 업
+                                const charLen = cell.split('').reduce((a, c) => a + (c.match(/[가-힣]/) ? 1.8 : 1.0), 0);
+                                const calcWidth = Math.ceil(charLen * 2.5);
                                 if (calcWidth > colWidths[i]) colWidths[i] = calcWidth;
                             }
                         });
@@ -717,15 +772,17 @@
                     ws['!cols'] = colWidths.map(w => ({ wch: w }));
 
                     ws['!rows'] = rowStyles.map(rType => {
-                        if (rType === "TITLE") return { hpt: 95 };
-                        if (rType === "HEADER") return { hpt: 85 };
-                        if (rType === "SUM") return { hpt: 85 };
-                        if (rType === "DATA") return { hpt: 80 };
-                        return { hpt: 40 };
+                        if (rType === "TITLE") return { hpt: 90 };
+                        if (rType === "HEADER") return { hpt: 80 };
+                        if (rType === "SUM") return { hpt: 80 };
+                        if (rType === "DATA") return { hpt: 75 };
+                        return { hpt: 35 };
                     });
                     
-                    // ★ 인쇄 시 A4 가로 한 페이지 너비에 꽉 차도록 강제 맞춤 설정 (비율 자동 축소)
-                    ws['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+                    // ★ 핵심: 엑셀 '한 페이지에 시트 맞추기(Fit to 1 Page)' 강제 활성화 및 여백 최소화
+                    ws['!fitToPage'] = true;
+                    ws['!pageSetup'] = { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 1 };
+                    ws['!margins'] = { left: 0.2, right: 0.2, top: 0.3, bottom: 0.3, header: 0.1, footer: 0.1 };
 
                     const range = XLSX.utils.decode_range(ws['!ref'] || "A1:F1");
                     for (let R = range.s.r; R <= range.e.r; ++R) {
@@ -747,11 +804,11 @@
                     return ws;
                 };
 
-                // 시트 1: 최종_제주시,신제주
+                // 시트 1: 최종_제주시,신제주 (A4 1장에 완벽히 들어가도록 세팅)
                 const ws1 = buildRegionSheet(["제주시", "신제주", "미분류"], false);
                 XLSX.utils.book_append_sheet(wb, ws1, "최종_제주시,신제주");
 
-                // 시트 2: 최종_서쪽,동쪽,서귀포
+                // 시트 2: 최종_서쪽,동쪽,서귀포 (A4 1장에 완벽히 들어가도록 세팅)
                 const ws2 = buildRegionSheet(["서쪽", "동쪽", "서귀포"], true);
                 XLSX.utils.book_append_sheet(wb, ws2, "최종_서쪽,동쪽,서귀포");
 
@@ -786,20 +843,22 @@
                 const ws3 = XLSX.utils.aoa_to_sheet(aoa3);
                 
                 // ★ 시트 3 글자 길이에 맞춰 열 너비 자동 계산
-                const colWidths3 = [15, 20, 15, 15, 45, 25, 18, 18];
+                const colWidths3 = [12, 18, 12, 12, 36, 22, 14, 14];
                 aoa3.forEach(row => {
                     row.forEach((cell, i) => {
                         if (cell && typeof cell === 'string') {
-                            const charLen = cell.split('').reduce((a, c) => a + (c.match(/[가-힣]/) ? 2 : 1.2), 0);
-                            const calcWidth = charLen * 3.5;
+                            const charLen = cell.split('').reduce((a, c) => a + (c.match(/[가-힣]/) ? 1.8 : 1.0), 0);
+                            const calcWidth = Math.ceil(charLen * 2.5);
                             if (calcWidth > colWidths3[i]) colWidths3[i] = calcWidth;
                         }
                     });
                 });
                 ws3['!cols'] = colWidths3.map(w => ({ wch: w }));
 
-                ws3['!rows'] = aoa3.map((_, idx) => ({ hpt: idx === 0 ? 95 : 80 }));
-                ws3['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+                ws3['!rows'] = aoa3.map((_, idx) => ({ hpt: idx === 0 ? 90 : 75 }));
+                ws3['!fitToPage'] = true;
+                ws3['!pageSetup'] = { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+                ws3['!margins'] = { left: 0.2, right: 0.2, top: 0.3, bottom: 0.3, header: 0.1, footer: 0.1 };
                 
                 const range3 = XLSX.utils.decode_range(ws3['!ref'] || "A1:H1");
                 for (let R = range3.s.r; R <= range3.e.r; ++R) {
@@ -815,10 +874,9 @@
                 XLSX.utils.book_append_sheet(wb, ws3, "지역분류 데이터");
 
                 XLSX.writeFile(wb, `배송분류완료_${processData.month}_${processData.type}.xlsx`);
-                showToast("50pt 초대형 폰트 엑셀 다운로드 완료!");
+                showToast("A4 1장 맞춤 + 50pt 엑셀 다운로드 완료!");
             };
 
-            // 신규 하차지 등록 상태 (주소, 전화번호 입력 추가)
             const [newCompName, setNewCompName] = useState('');
             const [newCompRegion, setNewCompRegion] = useState('제주시');
             const [newCompAddress, setNewCompAddress] = useState('');
@@ -884,11 +942,16 @@
                 return Array.from(mSet).sort().reverse();
             }, [history]);
 
+            const displayedHistory = useMemo(() => {
+                if (historyTab === '전체') return history;
+                return history.filter(item => (item.type || '쌀') === historyTab);
+            }, [history, historyTab]);
+
             return (
                 <div className="app-container">
                     {/* Toast 알림 */}
                     {toast && (
-                        <div className={`fixed top-16 left-1/2 transform -translate-x-1/2 z-50 px-5 py-3 rounded-full shadow-2xl text-xs font-bold flex items-center max-w-[90%] whitespace-nowrap transition-all ${toast.type === 'error' ? 'bg-rose-500 text-white' : 'bg-slate-800 text-white'}`}>
+                        <div className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-50 px-5 py-3.5 rounded-full shadow-2xl text-xs font-extrabold flex items-center max-w-[92%] whitespace-nowrap transition-all ${toast.type === 'error' ? 'bg-rose-600 text-white' : 'bg-stone-800 text-amber-300'}`}>
                             <Icon name={toast.type === 'error' ? 'alert-circle' : 'check-circle'} />
                             <span className="ml-2">{toast.message}</span>
                         </div>
@@ -896,48 +959,48 @@
 
                     {/* 업로드 설정 팝업 */}
                     {pendingFile && (
-                        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                            <div className="bg-white rounded-[28px] w-full max-w-sm overflow-hidden shadow-2xl p-5">
+                        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-[#fffdfa] rounded-[28px] w-full max-w-sm overflow-hidden shadow-2xl p-5 border border-[#e6dfd5]">
                                 <div className="text-center mb-4">
-                                    <h3 className="text-lg font-extrabold text-slate-800">문서 정보 입력</h3>
-                                    <p className="text-xs text-slate-400 mt-0.5">월과 품목, 정산 금액을 설정해주세요</p>
+                                    <h3 className="text-lg font-extrabold text-stone-800">문서 정보 입력</h3>
+                                    <p className="text-xs text-stone-400 mt-0.5">월과 품목, 정산 금액을 설정해주세요</p>
                                 </div>
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-2 gap-2.5">
-                                        <button type="button" onClick={() => setUploadType('쌀')} className={`py-3 px-2 rounded-2xl font-bold text-xs border-2 transition-all flex flex-col items-center justify-center gap-1.5 ${uploadType === '쌀' ? 'bg-amber-50 text-amber-900 border-amber-400' : 'bg-slate-50 text-slate-400 border-transparent opacity-70'}`}>
+                                        <button type="button" onClick={() => setUploadType('쌀')} className={`py-3 px-2 rounded-2xl font-bold text-xs border-2 transition-all flex flex-col items-center justify-center gap-1.5 ${uploadType === '쌀' ? 'bg-[#f4eee4] text-stone-800 border-stone-500' : 'bg-stone-50 text-stone-400 border-transparent opacity-70'}`}>
                                             <RiceChar className="w-11 h-11" />
                                             <span>쌀 내역서</span>
                                         </button>
-                                        <button type="button" onClick={() => setUploadType('팥')} className={`py-3 px-2 rounded-2xl font-bold text-xs border-2 transition-all flex flex-col items-center justify-center gap-1.5 ${uploadType === '팥' ? 'bg-rose-50 text-rose-900 border-rose-400' : 'bg-slate-50 text-slate-400 border-transparent opacity-70'}`}>
+                                        <button type="button" onClick={() => setUploadType('팥')} className={`py-3 px-2 rounded-2xl font-bold text-xs border-2 transition-all flex flex-col items-center justify-center gap-1.5 ${uploadType === '팥' ? 'bg-rose-50 text-rose-900 border-rose-400' : 'bg-stone-50 text-stone-400 border-transparent opacity-70'}`}>
                                             <BeanChar className="w-11 h-11" />
                                             <span>팥 내역서</span>
                                         </button>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-500 mb-1">해당 년/월</label>
-                                        <input type="month" value={uploadMonth} onChange={e => setUploadMonth(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-800 outline-none"/>
+                                        <label className="block text-xs font-bold text-stone-500 mb-1">해당 년/월</label>
+                                        <input type="month" value={uploadMonth} onChange={e => setUploadMonth(e.target.value)} className="w-full bg-[#f5f0e6] border border-[#d6cec2] rounded-xl px-3 py-2.5 text-sm font-bold text-stone-800 outline-none"/>
                                     </div>
-                                    <div className="bg-slate-50 p-3.5 rounded-2xl">
+                                    <div className="bg-[#f5f0e6] p-3.5 rounded-2xl">
                                         <div className="flex justify-between items-center mb-2">
-                                            <label className="text-xs font-bold text-slate-500">사장님께 받는 돈</label>
-                                            <span className="text-xs font-extrabold text-blue-600">{((Number(uploadAmountMan) || 0) * 10000).toLocaleString()} 원</span>
+                                            <label className="text-xs font-bold text-stone-500">사장님께 받는 돈</label>
+                                            <span className="text-xs font-extrabold text-stone-700">{((Number(uploadAmountMan) || 0) * 10000).toLocaleString()} 원</span>
                                         </div>
-                                        <div className="flex items-center space-x-2 mb-2.5 bg-white p-1 rounded-xl border border-slate-200">
+                                        <div className="flex items-center space-x-2 mb-2.5 bg-white p-1 rounded-xl border border-[#d6cec2]">
                                             <input type="number" step="10" placeholder="0" value={uploadAmountMan} onChange={(e) => setUploadAmountMan(e.target.value)} 
-                                                className="w-full px-2.5 py-1 text-right font-extrabold text-base text-slate-800 outline-none bg-transparent"/>
-                                            <span className="text-xs font-bold text-slate-400 pr-2.5 shrink-0">만원</span>
+                                                className="w-full px-2.5 py-1 text-right font-extrabold text-base text-stone-800 outline-none bg-transparent"/>
+                                            <span className="text-xs font-bold text-stone-400 pr-2.5 shrink-0">만원</span>
                                         </div>
                                         <div className="grid grid-cols-4 gap-1.5">
-                                            <button type="button" onClick={() => setUploadAmountMan(prev => (Number(prev)||0) + 10)} className="bg-white text-slate-600 border border-slate-200 text-xs font-bold py-2 rounded-lg active:scale-95">+10만</button>
-                                            <button type="button" onClick={() => setUploadAmountMan(prev => (Number(prev)||0) + 50)} className="bg-white text-slate-600 border border-slate-200 text-xs font-bold py-2 rounded-lg active:scale-95">+50만</button>
-                                            <button type="button" onClick={() => setUploadAmountMan(prev => (Number(prev)||0) + 100)} className="bg-white text-slate-600 border border-slate-200 text-xs font-bold py-2 rounded-lg active:scale-95">+100만</button>
+                                            <button type="button" onClick={() => setUploadAmountMan(prev => (Number(prev)||0) + 10)} className="bg-white text-stone-600 border border-[#d6cec2] text-xs font-bold py-2 rounded-lg active:scale-95">+10만</button>
+                                            <button type="button" onClick={() => setUploadAmountMan(prev => (Number(prev)||0) + 50)} className="bg-white text-stone-600 border border-[#d6cec2] text-xs font-bold py-2 rounded-lg active:scale-95">+50만</button>
+                                            <button type="button" onClick={() => setUploadAmountMan(prev => (Number(prev)||0) + 100)} className="bg-white text-stone-600 border border-[#d6cec2] text-xs font-bold py-2 rounded-lg active:scale-95">+100만</button>
                                             <button type="button" onClick={() => setUploadAmountMan(0)} className="bg-rose-50 text-rose-600 text-xs font-bold py-2 rounded-lg active:scale-95">초기화</button>
                                         </div>
                                     </div>
                                 </div>
                                 <div className="mt-5 flex gap-2">
-                                    <button type="button" onClick={() => setPendingFile(null)} className="flex-1 py-3 text-xs font-bold text-slate-500 bg-slate-100 rounded-full">취소</button>
-                                    <button type="button" onClick={confirmUpload} className="flex-1 py-3 text-xs font-bold text-white bg-blue-600 rounded-full shadow-md shadow-blue-200 active:scale-95">완료 및 분류</button>
+                                    <button type="button" onClick={() => setPendingFile(null)} className="flex-1 py-3 text-xs font-bold text-stone-500 bg-[#ede8df] rounded-full">취소</button>
+                                    <button type="button" onClick={confirmUpload} className="flex-1 py-3 text-xs font-bold text-white bg-stone-700 hover:bg-stone-800 rounded-full shadow-md shadow-stone-300 active:scale-95">완료 및 분류</button>
                                 </div>
                             </div>
                         </div>
@@ -945,32 +1008,32 @@
 
                     {/* 금액 수정 팝업 */}
                     {editingItem && (
-                        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                            <div className="bg-white rounded-[28px] w-full max-w-sm overflow-hidden shadow-2xl p-5">
+                        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-[#fffdfa] rounded-[28px] w-full max-w-sm overflow-hidden shadow-2xl p-5 border border-[#e6dfd5]">
                                 <div className="text-center mb-4">
-                                    <h3 className="text-lg font-extrabold text-slate-800">정산 금액 수정</h3>
-                                    <p className="text-xs text-slate-400 mt-0.5">{editingItem.month} · {editingItem.type} 내역서</p>
+                                    <h3 className="text-lg font-extrabold text-stone-800">정산 금액 수정</h3>
+                                    <p className="text-xs text-stone-400 mt-0.5">{editingItem.month} · {editingItem.type} 내역서</p>
                                 </div>
-                                <div className="bg-slate-50 p-3.5 rounded-2xl mb-5">
+                                <div className="bg-[#f5f0e6] p-3.5 rounded-2xl mb-5">
                                     <div className="flex justify-between items-center mb-2">
-                                        <label className="text-xs font-bold text-slate-500">사장님께 받는 돈</label>
-                                        <span className="text-xs font-extrabold text-blue-600">{((Number(editAmountMan) || 0) * 10000).toLocaleString()} 원</span>
+                                        <label className="text-xs font-bold text-stone-500">사장님께 받는 돈</label>
+                                        <span className="text-xs font-extrabold text-stone-700">{((Number(editAmountMan) || 0) * 10000).toLocaleString()} 원</span>
                                     </div>
-                                    <div className="flex items-center space-x-2 mb-2.5 bg-white p-1 rounded-xl border border-slate-200">
+                                    <div className="flex items-center space-x-2 mb-2.5 bg-white p-1 rounded-xl border border-[#d6cec2]">
                                         <input type="number" step="10" value={editAmountMan} onChange={(e) => setEditAmountMan(e.target.value)} 
-                                            className="w-full px-2.5 py-1 text-right font-extrabold text-base text-slate-800 outline-none bg-transparent"/>
-                                        <span className="text-xs font-bold text-slate-400 pr-2.5 shrink-0">만원</span>
+                                            className="w-full px-2.5 py-1 text-right font-extrabold text-base text-stone-800 outline-none bg-transparent"/>
+                                        <span className="text-xs font-bold text-stone-400 pr-2.5 shrink-0">만원</span>
                                     </div>
                                     <div className="grid grid-cols-4 gap-1.5">
-                                        <button type="button" onClick={() => setEditAmountMan(prev => (Number(prev)||0) + 10)} className="bg-white text-slate-600 border border-slate-200 text-xs font-bold py-2 rounded-lg active:scale-95">+10만</button>
-                                        <button type="button" onClick={() => setEditAmountMan(prev => (Number(prev)||0) + 50)} className="bg-white text-slate-600 border border-slate-200 text-xs font-bold py-2 rounded-lg active:scale-95">+50만</button>
-                                        <button type="button" onClick={() => setEditAmountMan(prev => (Number(prev)||0) + 100)} className="bg-white text-slate-600 border border-slate-200 text-xs font-bold py-2 rounded-lg active:scale-95">+100만</button>
+                                        <button type="button" onClick={() => setEditAmountMan(prev => (Number(prev)||0) + 10)} className="bg-white text-stone-600 border border-[#d6cec2] text-xs font-bold py-2 rounded-lg active:scale-95">+10만</button>
+                                        <button type="button" onClick={() => setEditAmountMan(prev => (Number(prev)||0) + 50)} className="bg-white text-stone-600 border border-[#d6cec2] text-xs font-bold py-2 rounded-lg active:scale-95">+50만</button>
+                                        <button type="button" onClick={() => setEditAmountMan(prev => (Number(prev)||0) + 100)} className="bg-white text-stone-600 border border-[#d6cec2] text-xs font-bold py-2 rounded-lg active:scale-95">+100만</button>
                                         <button type="button" onClick={() => setEditAmountMan(0)} className="bg-rose-50 text-rose-600 text-xs font-bold py-2 rounded-lg active:scale-95">초기화</button>
                                     </div>
                                 </div>
                                 <div className="flex gap-2">
-                                    <button type="button" onClick={() => setEditingItem(null)} className="flex-1 py-3 text-xs font-bold text-slate-500 bg-slate-100 rounded-full">취소</button>
-                                    <button type="button" onClick={saveEditedAmount} className="flex-1 py-3 text-xs font-bold text-white bg-blue-600 rounded-full shadow-md shadow-blue-200 active:scale-95">수정 완료</button>
+                                    <button type="button" onClick={() => setEditingItem(null)} className="flex-1 py-3 text-xs font-bold text-stone-500 bg-[#ede8df] rounded-full">취소</button>
+                                    <button type="button" onClick={saveEditedAmount} className="flex-1 py-3 text-xs font-bold text-white bg-stone-700 hover:bg-stone-800 rounded-full shadow-md shadow-stone-300 active:scale-95">수정 완료</button>
                                 </div>
                             </div>
                         </div>
@@ -978,55 +1041,55 @@
 
                     {/* 내역 삭제 확인 팝업 */}
                     {deletingItem && (
-                        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                            <div className="bg-white rounded-[28px] w-full max-w-sm overflow-hidden shadow-2xl p-6 text-center">
-                                <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center mx-auto mb-3">
-                                    <Icon name="trash-2" />
+                        <div className="fixed inset-0 bg-stone-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-[36px] w-full max-w-sm overflow-hidden shadow-2xl p-6 text-center border-2 border-rose-100">
+                                <div className="w-14 h-14 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center mx-auto mb-3">
+                                    <Icon name="trash-2" className="w-6 h-6" />
                                 </div>
-                                <h3 className="text-lg font-extrabold text-slate-800">내역을 삭제할까요?</h3>
-                                <p className="text-xs text-slate-400 mt-1 mb-5">
-                                    <span className="font-bold text-slate-600">{deletingItem.month} ({deletingItem.type})</span> 내역이 영구 삭제되며<br/>통계에서도 제외됩니다.
+                                <h3 className="text-lg font-black text-stone-800">내역을 삭제할까요?</h3>
+                                <p className="text-xs text-stone-400 mt-1.5 mb-6 leading-relaxed">
+                                    <span className="font-extrabold text-stone-700">{deletingItem.month} ({deletingItem.type})</span> 내역이 삭제되며<br/>통계에서도 즉시 제외됩니다.
                                 </p>
-                                <div className="flex gap-2">
-                                    <button type="button" onClick={() => setDeletingItem(null)} className="flex-1 py-3 text-xs font-bold text-slate-500 bg-slate-100 rounded-full">취소</button>
-                                    <button type="button" onClick={confirmDeleteHistory} className="flex-1 py-3 text-xs font-bold text-white bg-rose-500 hover:bg-rose-600 rounded-full shadow-md shadow-rose-200 active:scale-95">삭제하기</button>
+                                <div className="flex gap-2.5">
+                                    <button type="button" onClick={() => setDeletingItem(null)} className="flex-1 py-3.5 text-xs font-extrabold text-stone-500 bg-stone-100 rounded-full">취소</button>
+                                    <button type="button" onClick={confirmDeleteHistory} className="flex-1 py-3.5 text-xs font-black text-white bg-rose-500 hover:bg-rose-600 rounded-full shadow-md shadow-rose-200 active:scale-95">삭제하기</button>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* 상단 헤더 */}
-                    <header className="bg-white/90 backdrop-blur-md text-slate-800 px-5 py-3.5 font-extrabold text-base flex items-center justify-between sticky top-0 z-20 border-b border-slate-100">
+                    {/* 상단 헤더 (오트/베이지 톤) */}
+                    <header className="bg-[#f5f0e6]/95 backdrop-blur-md text-stone-800 px-5 py-3.5 font-extrabold text-base flex items-center justify-between sticky top-0 z-20 border-b border-[#e5dec9]">
                         <div className="flex items-center space-x-2">
-                            <div className="bg-blue-50 p-1.5 rounded-xl flex items-center justify-center">
+                            <div className="bg-[#e6dfd3] p-1.5 rounded-xl flex items-center justify-center">
                                 <RiceChar className="w-5 h-5" />
                             </div>
-                            <span className="tracking-tight text-slate-800">제주 쌀·팥 물류</span>
+                            <span className="tracking-tight text-stone-800">제주 쌀·팥 물류</span>
                         </div>
                         {user ? (
-                            <div className="bg-emerald-50 text-emerald-600 text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center">
+                            <div className="bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
                                 동기화됨
                             </div>
                         ) : (
-                            <div className="bg-slate-100 text-slate-400 text-[11px] font-bold px-2.5 py-1 rounded-full">연결 중...</div>
+                            <div className="bg-stone-200 text-stone-500 text-[11px] font-bold px-2.5 py-1 rounded-full">연결 중...</div>
                         )}
                     </header>
 
                     <main className="content-area">
-                        {/* 탭 1: 업로드 (모바일 한 화면에 들어오도록 컴팩트하게 조정) */}
+                        {/* 탭 1: 업로드 (차분한 오트/베이지 카드 디자인) */}
                         {activeTab === 'upload' && (
                             <div className="space-y-4">
-                                <div className="bg-white p-6 rounded-[28px] shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center">
-                                    <div className="flex items-center justify-center -space-x-2 mb-3">
+                                <div className="bg-gradient-to-b from-[#fffdfa] to-[#f4eee4] p-6 rounded-[28px] shadow-sm border border-[#e6dfd5] flex flex-col items-center justify-center text-center">
+                                    <div className="flex items-center justify-center -space-x-1 mb-3">
                                         <div className="animate-float z-10"><RiceChar className="w-16 h-16 drop-shadow-sm" /></div>
                                         <div className="animate-float" style={{ animationDelay: '1.5s' }}><BeanChar className="w-16 h-16 drop-shadow-sm" /></div>
                                     </div>
-                                    <h2 className="text-lg font-extrabold text-slate-800 mb-1">엑셀 자동 분류</h2>
-                                    <p className="text-xs text-slate-400 mb-5 leading-relaxed">수량이 있는 업체만 자동 필터링하여<br/>주소·전화번호가 완비된 양식으로 변환합니다</p>
+                                    <h2 className="text-lg font-extrabold text-stone-800 mb-1">엑셀 자동 분류</h2>
+                                    <p className="text-xs text-stone-500 mb-5 leading-relaxed">수량이 있는 업체만 자동 필터링하여<br/>주소·전화번호가 완비된 양식으로 변환합니다</p>
                                     
                                     <div className="file-input-wrapper w-full">
-                                        <button className="w-full bg-blue-600 text-white font-bold py-3.5 px-6 rounded-full shadow-lg shadow-blue-200 hover:bg-blue-700 transition active:scale-95 flex items-center justify-center gap-2 text-sm">
+                                        <button className="w-full bg-stone-700 text-[#fffdfa] font-bold py-3.5 px-6 rounded-full shadow-md shadow-stone-300/80 hover:bg-stone-800 transition active:scale-95 flex items-center justify-center gap-2 text-sm">
                                             <Icon name="upload-cloud" />
                                             <span>파일 선택하기</span>
                                         </button>
@@ -1035,36 +1098,36 @@
                                 </div>
 
                                 {currentProcess && (
-                                    <div className="bg-white p-5 rounded-[28px] shadow-sm border-2 border-emerald-400/90 relative overflow-hidden">
+                                    <div className="bg-[#fffdfa] p-5 rounded-[28px] shadow-sm border-2 border-[#c7bba8] relative overflow-hidden">
                                         <div className="flex items-center justify-between mb-4">
                                             <div className="flex items-center min-w-0 pr-2">
-                                                <div className="bg-slate-50 p-2 rounded-xl mr-2.5 shrink-0">
+                                                <div className="bg-[#f4eee4] p-2 rounded-xl mr-2.5 shrink-0">
                                                     {currentProcess.type === '쌀' ? <RiceChar className="w-8 h-8" /> : <BeanChar className="w-8 h-8" />}
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <h3 className="font-extrabold text-slate-800 text-sm truncate">{currentProcess.type} 분류 완료 ({currentProcess.totalSacks.toLocaleString()}포)</h3>
-                                                    <span className="text-[11px] text-slate-400 block truncate">{currentProcess.fileName}</span>
+                                                    <h3 className="font-extrabold text-stone-800 text-sm truncate">{currentProcess.type} 분류 완료 ({currentProcess.totalSacks.toLocaleString()}포)</h3>
+                                                    <span className="text-[11px] text-stone-400 block truncate">{currentProcess.fileName}</span>
                                                 </div>
                                             </div>
-                                            <span className="text-xs bg-emerald-50 text-emerald-600 px-2.5 py-1 rounded-full font-extrabold shrink-0">
+                                            <span className="text-xs bg-[#ede8df] text-stone-700 px-2.5 py-1 rounded-full font-extrabold shrink-0">
                                                 {currentProcess.month}
                                             </span>
                                         </div>
                                         <div className="grid grid-cols-2 gap-2.5 mb-4">
-                                            <div className="bg-slate-50 p-3 rounded-2xl text-center">
-                                                <div className="text-[11px] font-bold text-slate-400 mb-0.5">실제 배송 업체</div>
-                                                <div className="font-extrabold text-slate-800 text-xl">{currentProcess.totalCompanies}<span className="text-xs font-semibold ml-0.5">곳</span></div>
+                                            <div className="bg-[#f7f4ef] p-3 rounded-2xl text-center border border-[#ede8df]">
+                                                <div className="text-[11px] font-bold text-stone-400 mb-0.5">실제 배송 업체</div>
+                                                <div className="font-extrabold text-stone-800 text-xl">{currentProcess.totalCompanies}<span className="text-xs font-semibold ml-0.5">곳</span></div>
                                             </div>
-                                            <div className="bg-slate-50 p-3 rounded-2xl text-center">
-                                                <div className="text-[11px] font-bold text-slate-400 mb-0.5">미분류(신규)</div>
-                                                <div className={`font-extrabold text-xl ${currentProcess.unclassifiedCount > 0 ? 'text-rose-500' : 'text-slate-800'}`}>
+                                            <div className="bg-[#f7f4ef] p-3 rounded-2xl text-center border border-[#ede8df]">
+                                                <div className="text-[11px] font-bold text-stone-400 mb-0.5">미분류(신규)</div>
+                                                <div className={`font-extrabold text-xl ${currentProcess.unclassifiedCount > 0 ? 'text-rose-500' : 'text-stone-800'}`}>
                                                     {currentProcess.unclassifiedCount}<span className="text-xs font-semibold ml-0.5">곳</span>
                                                 </div>
                                             </div>
                                         </div>
                                         <button 
                                             onClick={() => downloadExcel(currentProcess)}
-                                            className="w-full bg-emerald-500 text-white font-bold py-3.5 px-5 rounded-full shadow-md shadow-emerald-100 hover:bg-emerald-600 transition flex items-center justify-center active:scale-95 text-sm">
+                                            className="w-full bg-emerald-700 text-white font-bold py-3.5 px-5 rounded-full shadow-md shadow-emerald-900/10 hover:bg-emerald-800 transition flex items-center justify-center active:scale-95 text-sm">
                                             <Icon name="download" />
                                             <span className="ml-1.5">분류된 엑셀 내려받기</span>
                                         </button>
@@ -1076,31 +1139,31 @@
                         {/* 탭 2: 월별 내역 */}
                         {activeTab === 'history' && (
                             <div className="space-y-4">
-                                <h2 className="text-lg font-extrabold text-slate-800 px-1">내역 조회</h2>
+                                <h2 className="text-lg font-extrabold text-stone-800 px-1">내역 조회</h2>
                                 
-                                <div className="flex bg-slate-200/70 p-1 rounded-full gap-1">
+                                <div className="flex bg-[#e6dfd5] p-1 rounded-full gap-1">
                                     <button 
                                         onClick={() => setHistoryTab('쌀')}
-                                        className={`flex-1 py-2 rounded-full font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${historyTab === '쌀' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}>
+                                        className={`flex-1 py-2 rounded-full font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${historyTab === '쌀' ? 'bg-[#fffdfa] text-stone-800 shadow-sm' : 'text-stone-500'}`}>
                                         <RiceChar className="w-5 h-5" />
                                         <span>쌀 내역</span>
-                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${historyTab === '쌀' ? 'bg-amber-100 text-amber-800' : 'bg-slate-300/70 text-slate-600'}`}>
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${historyTab === '쌀' ? 'bg-[#ede8df] text-stone-700' : 'bg-stone-300/60 text-stone-600'}`}>
                                             {history.filter(h => (h.type || '쌀') === '쌀').length}
                                         </span>
                                     </button>
                                     <button 
                                         onClick={() => setHistoryTab('팥')}
-                                        className={`flex-1 py-2 rounded-full font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${historyTab === '팥' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}>
+                                        className={`flex-1 py-2 rounded-full font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${historyTab === '팥' ? 'bg-[#fffdfa] text-stone-800 shadow-sm' : 'text-stone-500'}`}>
                                         <BeanChar className="w-5 h-5" />
                                         <span>팥 내역</span>
-                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${historyTab === '팥' ? 'bg-rose-100 text-rose-800' : 'bg-slate-300/70 text-slate-600'}`}>
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${historyTab === '팥' ? 'bg-rose-100 text-rose-800' : 'bg-stone-300/60 text-stone-600'}`}>
                                             {history.filter(h => h.type === '팥').length}
                                         </span>
                                     </button>
                                 </div>
 
                                 {history.filter(item => (item.type || '쌀') === historyTab).length === 0 ? (
-                                    <div className="text-center text-slate-400 py-12 bg-white rounded-[28px] border border-dashed border-slate-200 flex flex-col items-center justify-center">
+                                    <div className="text-center text-stone-400 py-12 bg-[#fffdfa] rounded-[28px] border border-dashed border-[#d6cec2] flex flex-col items-center justify-center">
                                         <div className="opacity-40 mb-2 grayscale">
                                             {historyTab === '쌀' ? <RiceChar className="w-12 h-12" /> : <BeanChar className="w-12 h-12" />}
                                         </div>
@@ -1108,31 +1171,31 @@
                                     </div>
                                 ) : (
                                     history.filter(item => (item.type || '쌀') === historyTab).map((item) => (
-                                        <div key={item.id} className="bg-white p-4 rounded-[24px] shadow-sm border border-slate-100">
+                                        <div key={item.id} className="bg-[#fffdfa] p-4 rounded-[24px] shadow-sm border border-[#e6dfd5]">
                                             <div className="flex justify-between items-center mb-3">
                                                 <div className="flex items-center gap-3">
-                                                    <div className={`p-2 rounded-2xl ${item.type === '팥' ? 'bg-rose-50' : 'bg-amber-50'}`}>
+                                                    <div className={`p-2 rounded-2xl ${item.type === '팥' ? 'bg-rose-50/70' : 'bg-[#f4eee4]'}`}>
                                                         {item.type === '팥' ? <BeanChar className="w-8 h-8" /> : <RiceChar className="w-8 h-8" />}
                                                     </div>
                                                     <div>
-                                                        <span className="text-base font-extrabold text-slate-800 block">{item.month || '날짜미상'}</span>
-                                                        <span className="text-[11px] font-medium text-slate-400">{item.date} · {item.totalCompanies}곳</span>
+                                                        <span className="text-base font-extrabold text-stone-800 block">{item.month || '날짜미상'}</span>
+                                                        <span className="text-[11px] font-medium text-stone-400">{item.date} · {item.totalCompanies}곳</span>
                                                     </div>
                                                 </div>
                                                 <div className="text-right">
-                                                    <div className="text-slate-800 font-extrabold text-lg">{item.totalSacks.toLocaleString()}<span className="text-xs font-semibold text-slate-500 ml-0.5">포</span></div>
-                                                    <div className="text-[11px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full mt-0.5 inline-block">{(item.expectedAmount || 0).toLocaleString()}원</div>
+                                                    <div className="text-stone-800 font-extrabold text-lg">{item.totalSacks.toLocaleString()}<span className="text-xs font-semibold text-stone-500 ml-0.5">포</span></div>
+                                                    <div className="text-[11px] font-bold text-stone-700 bg-[#ede8df] px-2 py-0.5 rounded-full mt-0.5 inline-block">{(item.expectedAmount || 0).toLocaleString()}원</div>
                                                 </div>
                                             </div>
                                             
-                                            <div className="grid grid-cols-4 gap-1.5 pt-2.5 border-t border-slate-50">
-                                                <button onClick={() => { setCurrentProcess(item); setActiveTab('upload'); }} className="bg-slate-50 text-slate-600 text-xs py-2.5 rounded-full font-bold active:scale-95">
+                                            <div className="grid grid-cols-4 gap-1.5 pt-2.5 border-t border-[#f4eee4]">
+                                                <button onClick={() => { setCurrentProcess(item); setActiveTab('upload'); }} className="bg-[#f7f4ef] text-stone-600 text-xs py-2.5 rounded-full font-bold active:scale-95">
                                                     요약
                                                 </button>
-                                                <button onClick={() => { setEditingItem(item); setEditAmountMan((item.expectedAmount || 0) / 10000); }} className="bg-amber-50 text-amber-800 text-xs py-2.5 rounded-full font-bold active:scale-95">
+                                                <button onClick={() => { setEditingItem(item); setEditAmountMan((item.expectedAmount || 0) / 10000); }} className="bg-[#ede8df] text-stone-700 text-xs py-2.5 rounded-full font-bold active:scale-95">
                                                     금액수정
                                                 </button>
-                                                <button onClick={() => downloadExcel(item)} className="bg-blue-50 text-blue-600 text-xs py-2.5 rounded-full font-bold active:scale-95">
+                                                <button onClick={() => downloadExcel(item)} className="bg-stone-700 text-white text-xs py-2.5 rounded-full font-bold active:scale-95">
                                                     엑셀다운
                                                 </button>
                                                 <button onClick={() => setDeletingItem(item)} className="bg-rose-50 text-rose-600 text-xs py-2.5 rounded-full font-bold active:scale-95">
@@ -1148,14 +1211,14 @@
                         {/* 탭 3: 나의 하차지 (주소, 전화번호 관리 추가) */}
                         {activeTab === 'regions' && (
                             <div className="space-y-4">
-                                <h2 className="text-lg font-extrabold text-slate-800 px-1">나의 하차지</h2>
+                                <h2 className="text-lg font-extrabold text-stone-800 px-1">나의 하차지</h2>
                                 
-                                <div className="bg-white p-4 rounded-[24px] shadow-sm border border-slate-100">
-                                    <h3 className="text-xs font-extrabold text-slate-700 mb-2.5 flex items-center"><Icon name="plus-circle" /><span className="ml-1.5">신규/수정 하차지 등록</span></h3>
+                                <div className="bg-[#fffdfa] p-4 rounded-[24px] shadow-sm border border-[#e6dfd5]">
+                                    <h3 className="text-xs font-extrabold text-stone-700 mb-2.5 flex items-center"><Icon name="plus-circle" /><span className="ml-1.5">신규/수정 하차지 등록</span></h3>
                                     <form onSubmit={addRegion} className="space-y-2">
                                         <div className="flex gap-2">
-                                            <input type="text" placeholder="상호명 (필수)" value={newCompName} onChange={e=>setNewCompName(e.target.value)} className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-medium outline-none focus:bg-white focus:border-blue-500"/>
-                                            <select value={newCompRegion} onChange={e=>setNewCompRegion(e.target.value)} className="shrink-0 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700 outline-none">
+                                            <input type="text" placeholder="상호명 (필수)" value={newCompName} onChange={e=>setNewCompName(e.target.value)} className="flex-1 min-w-0 bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2.5 text-xs font-medium outline-none focus:bg-white focus:border-stone-500"/>
+                                            <select value={newCompRegion} onChange={e=>setNewCompRegion(e.target.value)} className="shrink-0 bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2.5 text-xs font-bold text-stone-700 outline-none">
                                                 <option value="제주시">제주시</option>
                                                 <option value="신제주">신제주</option>
                                                 <option value="서쪽">서쪽</option>
@@ -1164,28 +1227,28 @@
                                             </select>
                                         </div>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <input type="text" placeholder="주소 입력" value={newCompAddress} onChange={e=>setNewCompAddress(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs outline-none focus:bg-white focus:border-blue-500"/>
-                                            <input type="text" placeholder="전화번호 입력" value={newCompPhone} onChange={e=>setNewCompPhone(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs outline-none focus:bg-white focus:border-blue-500"/>
+                                            <input type="text" placeholder="주소 입력" value={newCompAddress} onChange={e=>setNewCompAddress(e.target.value)} className="w-full bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2.5 text-xs outline-none focus:bg-white focus:border-stone-500"/>
+                                            <input type="text" placeholder="전화번호 입력" value={newCompPhone} onChange={e=>setNewCompPhone(e.target.value)} className="w-full bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2.5 text-xs outline-none focus:bg-white focus:border-stone-500"/>
                                         </div>
-                                        <button type="submit" className="w-full bg-slate-800 text-white py-2.5 rounded-xl text-xs font-bold active:scale-95 transition shadow-sm">하차지 저장</button>
+                                        <button type="submit" className="w-full bg-stone-700 text-white py-2.5 rounded-xl text-xs font-bold active:scale-95 transition shadow-sm">하차지 저장</button>
                                     </form>
                                 </div>
 
-                                <div className="bg-white rounded-[24px] shadow-sm border border-slate-100 overflow-hidden">
-                                    <div className="px-5 py-3.5 bg-slate-50/50 border-b border-slate-100 font-extrabold text-slate-700 text-xs flex justify-between items-center">
+                                <div className="bg-[#fffdfa] rounded-[24px] shadow-sm border border-[#e6dfd5] overflow-hidden">
+                                    <div className="px-5 py-3.5 bg-[#f4eee4]/60 border-b border-[#e6dfd5] font-extrabold text-stone-700 text-xs flex justify-between items-center">
                                         <span>등록된 하차지 목록</span>
-                                        <span className="bg-blue-50 text-blue-600 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold">{Object.keys(masterData).length}곳</span>
+                                        <span className="bg-[#ede8df] text-stone-700 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold">{Object.keys(masterData).length}곳</span>
                                     </div>
-                                    <div className="max-h-[340px] overflow-y-auto divide-y divide-slate-50 px-2">
+                                    <div className="max-h-[340px] overflow-y-auto divide-y divide-[#f4eee4] px-2">
                                         {Object.entries(masterData).map(([name, info], idx) => (
-                                            <div key={idx} onClick={() => { setNewCompName(name); setNewCompRegion(info.region); setNewCompAddress(info.address||''); setNewCompPhone(info.phone||''); }} className="px-3 py-3 flex justify-between items-center hover:bg-slate-50 rounded-xl cursor-pointer">
+                                            <div key={idx} onClick={() => { setNewCompName(name); setNewCompRegion(info.region); setNewCompAddress(info.address||''); setNewCompPhone(info.phone||''); }} className="px-3 py-3 flex justify-between items-center hover:bg-[#f7f4ef] rounded-xl cursor-pointer">
                                                 <div className="min-w-0 pr-2">
-                                                    <div className="text-xs font-bold text-slate-800">{name}</div>
-                                                    <div className="text-[10px] text-slate-400 truncate mt-0.5">
+                                                    <div className="text-xs font-bold text-stone-800">{name}</div>
+                                                    <div className="text-[10px] text-stone-400 truncate mt-0.5">
                                                         {info.address || '주소미입력'} · {info.phone || '번호미입력'}
                                                     </div>
                                                 </div>
-                                                <span className="shrink-0 text-[11px] px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full font-bold">{info.region}</span>
+                                                <span className="shrink-0 text-[11px] px-2.5 py-1 bg-[#ede8df] text-stone-600 rounded-full font-bold">{info.region}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -1193,54 +1256,54 @@
                             </div>
                         )}
 
-                        {/* 탭 4: 통계 */}
+                        {/* 탭 4: 통계 (주황색/파란색 그라데이션 대신 고급스러운 오트 베이지 그라데이션 적용) */}
                         {activeTab === 'stats' && (
                             <div className="space-y-4">
-                                <h2 className="text-lg font-extrabold text-slate-800 px-1">정산 및 통계</h2>
+                                <h2 className="text-lg font-extrabold text-stone-800 px-1">정산 및 통계</h2>
 
-                                <div className="bg-white p-2 rounded-full shadow-sm border border-slate-100 flex gap-1.5">
-                                    <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="flex-1 bg-slate-50 text-slate-700 font-bold text-xs rounded-full px-3 py-2 outline-none">
+                                <div className="bg-[#fffdfa] p-2 rounded-full shadow-sm border border-[#e6dfd5] flex gap-1.5">
+                                    <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="flex-1 bg-[#f7f4ef] text-stone-700 font-bold text-xs rounded-full px-3 py-2 outline-none">
                                         <option value="ALL">모든 월 전체</option>
                                         {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
                                     </select>
-                                    <select value={filterType} onChange={e => setFilterType(e.target.value)} className="bg-slate-50 text-slate-700 font-bold text-xs rounded-full px-3 py-2 outline-none">
+                                    <select value={filterType} onChange={e => setFilterType(e.target.value)} className="bg-[#f7f4ef] text-stone-700 font-bold text-xs rounded-full px-3 py-2 outline-none">
                                         <option value="전체">모든 품목</option>
                                         <option value="쌀">쌀</option>
                                         <option value="팥">팥</option>
                                     </select>
                                 </div>
                                 
-                                <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-5 rounded-[28px] shadow-lg shadow-blue-200/50 text-white">
-                                    <div className="text-blue-100 text-xs font-medium mb-1 flex items-center justify-between">
+                                <div className="bg-gradient-to-br from-[#e6dec8] via-[#dcd2b8] to-[#cbbd9d] p-5 rounded-[28px] shadow-md shadow-stone-200/70 text-stone-800 border border-[#d6c9ae]">
+                                    <div className="text-stone-600 text-xs font-bold mb-1 flex items-center justify-between">
                                         <span>사장님께 받은 총 정산금</span>
-                                        <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full text-white font-bold">10만원 단위</span>
+                                        <span className="text-[10px] bg-white/60 px-2.5 py-0.5 rounded-full text-stone-700 font-extrabold">10만원 단위</span>
                                     </div>
-                                    <div className="text-2xl font-extrabold mb-4 tracking-tight">
-                                        {filteredStats.expected.toLocaleString()} <span className="text-base font-normal opacity-80">원</span>
+                                    <div className="text-2xl font-extrabold mb-4 tracking-tight text-stone-900">
+                                        {filteredStats.expected.toLocaleString()} <span className="text-base font-bold opacity-75">원</span>
                                     </div>
                                     
-                                    <div className="grid grid-cols-2 gap-3 bg-white/10 p-3.5 rounded-2xl backdrop-blur-sm">
+                                    <div className="grid grid-cols-2 gap-3 bg-[#fffdfa]/75 p-3.5 rounded-2xl backdrop-blur-sm border border-white/60">
                                         <div>
-                                            <div className="text-blue-100 text-[11px] mb-0.5">총 배송 수량</div>
-                                            <div className="font-extrabold text-base">{filteredStats.sacks.toLocaleString()} 포</div>
+                                            <div className="text-stone-500 text-[11px] font-semibold mb-0.5">총 배송 수량</div>
+                                            <div className="font-extrabold text-base text-stone-800">{filteredStats.sacks.toLocaleString()} 포</div>
                                         </div>
                                         <div>
-                                            <div className="text-blue-100 text-[11px] mb-0.5">업로드 문서</div>
-                                            <div className="font-extrabold text-base">{filteredStats.docs.length} 건</div>
+                                            <div className="text-stone-500 text-[11px] font-semibold mb-0.5">업로드 문서</div>
+                                            <div className="font-extrabold text-base text-stone-800">{filteredStats.docs.length} 건</div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="bg-white rounded-[28px] shadow-sm border border-slate-100 p-4">
-                                    <div className="font-extrabold text-slate-700 text-xs mb-3">권역별 배송량 비율</div>
+                                <div className="bg-[#fffdfa] rounded-[28px] shadow-sm border border-[#e6dfd5] p-4">
+                                    <div className="font-extrabold text-stone-700 text-xs mb-3">권역별 배송량 비율</div>
                                     <div className="space-y-3">
                                         {Object.entries(filteredStats.regions).map(([rName, rSacks]) => (
                                             <div key={rName} className="flex items-center">
-                                                <div className="w-14 text-xs font-bold text-slate-600">{rName}</div>
-                                                <div className="flex-1 mx-2 h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                                                    <div className={`h-full rounded-full transition-all duration-500 ${rName === '미분류' ? 'bg-rose-400' : 'bg-blue-500'}`} style={{ width: `${filteredStats.sacks > 0 ? (rSacks / filteredStats.sacks) * 100 : 0}%` }}></div>
+                                                <div className="w-14 text-xs font-bold text-stone-600">{rName}</div>
+                                                <div className="flex-1 mx-2 h-2.5 bg-[#f4eee4] rounded-full overflow-hidden">
+                                                    <div className={`h-full rounded-full transition-all duration-500 ${rName === '미분류' ? 'bg-rose-400' : 'bg-[#8c7a6b]'}`} style={{ width: `${filteredStats.sacks > 0 ? (rSacks / filteredStats.sacks) * 100 : 0}%` }}></div>
                                                 </div>
-                                                <div className="w-14 text-right text-xs font-extrabold text-slate-700">{rSacks.toLocaleString()}<span className="text-[10px] font-normal text-slate-400 ml-0.5">포</span></div>
+                                                <div className="w-14 text-right text-xs font-extrabold text-stone-700">{rSacks.toLocaleString()}<span className="text-[10px] font-normal text-stone-400 ml-0.5">포</span></div>
                                             </div>
                                         ))}
                                     </div>
@@ -1262,11 +1325,11 @@
                             </div>
                             <div className={`nav-item ${activeTab === 'regions' ? 'active' : ''}`} onClick={() => setActiveTab('regions')}>
                                 <Icon name="map-pin" />
-                                <span>하차지</span>
+                                <span>나의하차지</span>
                             </div>
                             <div className={`nav-item ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')}>
                                 <Icon name="pie-chart" />
-                                <span>통계</span>
+                                <span>월별통계</span>
                             </div>
                         </nav>
                     </div>
