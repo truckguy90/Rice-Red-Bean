@@ -80,147 +80,154 @@
         );
 
         const initialMasterData = {
-            "건입떡집": { region: "제주시", address: "제주시 건입동", phone: "010-9487-5889" },
-            "고향떡집": { region: "제주시", address: "제주시", phone: "010-6693-3160" },
-            "낙원떡방아": { region: "제주시", address: "제주시", phone: "010-4690-2605" },
-            "낙원떡집(동문)": { region: "제주시", address: "제주시 중앙로11길 8 (동문시장)", phone: "010-3639-3628" },
+            // [제주시]
+            "건입떡집": { region: "제주시", address: "제주시 만덕로 36-1", phone: "010-9487-5889" },
+            "고향떡집": { region: "제주시", address: "제주시 동광로16길 24", phone: "010-6693-3160" },
+            "낙원떡방아": { region: "제주시", address: "제주시 동광로 116", phone: "010-4690-2605" },
             "낙원떡방아(동문)": { region: "제주시", address: "제주시 중앙로11길 8 (동문시장)", phone: "010-3639-3628" },
-            "남광떡집": { region: "제주시", address: "제주시", phone: "010-2691-5976" },
-            "도남떡방앗간": { region: "제주시", address: "제주시 도남로 84", phone: "010-6211-3848" },
+            "낙원떡집(동문)": { region: "제주시", address: "제주시 중앙로11길 8 (동문시장)", phone: "010-3639-3628" },
+            "남광떡집": { region: "제주시", address: "제주시 일주동로 350", phone: "010-2691-5976" },
             "도남떡집": { region: "제주시", address: "제주시 도남로 84", phone: "010-6211-3848" },
-            "도남오거리": { region: "제주시", address: "제주 제주시 신성로6길 3", phone: "010-3367-8880" },
+            "도남떡방앗간": { region: "제주시", address: "제주시 도남로 84", phone: "010-6211-3848" },
             "도남오거리떡방앗간": { region: "제주시", address: "제주 제주시 신성로6길 3", phone: "010-3367-8880" },
-            "동문떡방": { region: "제주시", address: "제주시 동문시장", phone: "010-5559-2950" },
-            "동백": { region: "제주시", address: "제주 제주시 서문로4길 15-1", phone: "010-4690-4077" },
+            "도남오거리": { region: "제주시", address: "제주 제주시 신성로6길 3", phone: "010-3367-8880" },
+            "동문떡방": { region: "제주시", address: "제주시 동문로6길 9-1", phone: "010-5559-2950" },
             "동백떡집": { region: "제주시", address: "제주 제주시 서문로4길 15-1", phone: "010-4690-4077" },
+            "동백": { region: "제주시", address: "제주 제주시 서문로4길 15-1", phone: "010-4690-4077" },
             "떡마을": { region: "제주시", address: "제주 제주시 남광북1길 46", phone: "010-4693-7920" },
             "떡방동행": { region: "제주시", address: "건주로4길 24", phone: "010-4595-5606" },
             "떡하니": { region: "제주시", address: "제주시 도남로15길 25, 101호", phone: "010-3692-5054" },
-            "마실": { region: "제주시", address: "제주시", phone: "010-4991-1352" },
-            "만민": { region: "제주시", address: "제주시", phone: "010-4983-2026" },
-            "명가떡사랑": { region: "제주시", address: "제주시", phone: "010-7449-6708" },
+            "마실": { region: "제주시", address: "제주시 고마로17길 1", phone: "010-4991-1352" },
+            "만민": { region: "제주시", address: "제주시 중앙로14길 33-1", phone: "010-4983-2026" },
+            "명가떡사랑": { region: "제주시", address: "제주시 번영로 533", phone: "010-7449-6708" },
             "명당떡집": { region: "제주시", address: "제주시 신성로 78", phone: "010-3412-3532" },
-            "명당떡집용담점": { region: "제주시", address: "제주시 용담동", phone: "010-6745-2080" },
-            "명당양과구남점": { region: "제주시", address: "제주시 구남동", phone: "010-3692-4601" },
-            "명류당": { region: "제주시", address: "제주시", phone: "010-8244-1855" },
-            "명원가": { region: "제주시", address: "제주시", phone: "010-6726-2285" },
+            "명당떡집용담점": { region: "제주시", address: "제주시 서사로 18, 1층", phone: "010-6745-2080" },
+            "명당양과구남점": { region: "제주시", address: "제주시 구남동4길 36, 1층", phone: "010-3692-4601" },
+            "명류당": { region: "제주시", address: "제주시 서사로 149-3", phone: "010-8244-1855" },
+            "명원가": { region: "제주시", address: "제주시 남광로 102", phone: "010-6726-2285" },
             "미듬민속떡집": { region: "제주시", address: "제주시 인다13길 10-8", phone: "010-9449-2594" },
-            "삼다도떡집": { region: "제주시", address: "제주시", phone: "010-8893-8923" },
-            "새서울떡집": { region: "제주시", address: "제주시", phone: "010-5758-6002" },
-            "서사라": { region: "제주시", address: "제주시 서사라", phone: "010-4665-2188" },
-            "서우봉떡집": { region: "동쪽", address: "제주시 조천읍 함덕리", phone: "010-4086-7833" },
-            "섬나라": { region: "제주시", address: "제주시 중앙로 358,1층", phone: "010-3107-6699" },
+            "삼다도떡집": { region: "제주시", address: "제주시 동문로4길 9", phone: "010-8893-8923" },
+            "새서울떡집": { region: "제주시", address: "제주시 동광로1길 25, 1층", phone: "010-5758-6002" },
+            "서사라": { region: "제주시", address: "제주시 서광로13길 7", phone: "010-4665-2188" },
             "섬나라오메기": { region: "제주시", address: "제주시 중앙로 358,1층", phone: "010-3375-4545" },
             "설나라오메기": { region: "제주시", address: "제주시 중앙로 358,1층", phone: "010-3375-4545" },
-            "성도": { region: "제주시", address: "제주시 남성로8길 5", phone: "010-9536-3339" },
+            "섬나라": { region: "제주시", address: "제주시 중앙로 358,1층", phone: "010-3107-6699" },
             "성도떡집": { region: "제주시", address: "제주시 남성로8길 5", phone: "010-9536-3339" },
-            "세진": { region: "제주시", address: "제주시 서광로11길 11-1", phone: "010-2689-2318" },
+            "성도": { region: "제주시", address: "제주시 남성로8길 5", phone: "010-9536-3339" },
             "세진방앗간": { region: "제주시", address: "제주시 서광로11길 11-1", phone: "010-2689-2318" },
+            "세진": { region: "제주시", address: "제주시 서광로11길 11-1", phone: "010-2689-2318" },
             "소망떡집": { region: "제주시", address: "제주 제주시 진동로5길 31", phone: "010-2730-1238" },
-            "소민떡방": { region: "제주시", address: "제주시", phone: "010-3347-2508" },
-            "수가성오메기떡": { region: "제주시", address: "제주시", phone: "010-6655-8562" },
-            "수라간떡방": { region: "제주시", address: "제주시", phone: "010-3459-9882" },
-            "수빈": { region: "제주시", address: "제주 제주시 서광로20길 7", phone: "010-7270-0389" },
+            "소민떡방": { region: "제주시", address: "제주시 연신로 56 1층", phone: "010-3347-2508" },
+            "수가성오메기떡": { region: "제주시", address: "제주시 서광로 266-1", phone: "010-6655-8562" },
+            "수라간떡방": { region: "제주시", address: "제주시 아란9길 10-4 1층", phone: "010-3459-9882" },
             "수빈떡방앗간": { region: "제주시", address: "제주 제주시 서광로20길 7", phone: "010-7270-0389" },
-            "시장떡집": { region: "제주시", address: "제주시 동문시장", phone: "010-3418-6243" },
-            "신선": { region: "제주시", address: "제주시 신산로7길 36-2", phone: "010-3637-1919" },
+            "수빈": { region: "제주시", address: "제주 제주시 서광로20길 7", phone: "010-7270-0389" },
+            "시장떡집": { region: "제주시", address: "제주시 관덕로14길 20, 보성시장 내", phone: "010-3418-6243" },
             "신선떡방앗간": { region: "제주시", address: "제주시 신산로7길 36-2", phone: "010-3637-1919" },
-            "신성떡집": { region: "제주시", address: "제주시", phone: "010-3816-9909" },
-            "신촌떡방앗간": { region: "동쪽", address: "제주시 조천읍 신촌리", phone: "010-5162-1400" },
-            "아리랑떡방": { region: "제주시", address: "제주시", phone: "010-6691-1991" },
-            "여진떡집": { region: "제주시", address: "제주시", phone: "010-4709-2647" },
-            "오돌또기오메기떡": { region: "제주시", address: "제주시", phone: "010-4692-9201" },
-            "오물오물오메기떡": { region: "제주시", address: "제주시", phone: "010-4692-9201" },
-            "오일장떡집": { region: "신제주", address: "제주시 오일장서길", phone: "010-8632-4554" },
-            "외도오복떡집": { region: "서쪽", address: "제주시 외도일동", phone: "010-3969-0087" },
-            "용담": { region: "제주시", address: "제주 제주시 흥운길 25-4", phone: "010-9838-5128" },
+            "신선": { region: "제주시", address: "제주시 신산로7길 36-2", phone: "010-3637-1919" },
+            "신성떡집": { region: "제주시", address: "제주시 남광로2길 40", phone: "010-3816-9909" },
+            "아리랑떡방": { region: "제주시", address: "제주시 삼양로 73", phone: "010-6691-1991" },
+            "여진떡집": { region: "제주시", address: "제주시 진군남4길 13-1", phone: "010-4709-2647" },
+            "오돌또기오메기떡": { region: "제주시", address: "제주시 동광로1길 32-1", phone: "010-4692-9201" },
+            "오물오물오메기떡": { region: "제주시", address: "제주시 동광로1길 32-1", phone: "010-4692-9201" },
             "용담떡방앗간": { region: "제주시", address: "제주 제주시 흥운길 25-4", phone: "010-9838-5128" },
+            "용담": { region: "제주시", address: "제주 제주시 흥운길 25-4", phone: "010-9838-5128" },
             "용문떡방": { region: "제주시", address: "제주 제주시 용문로 137", phone: "010-9840-9493" },
-            "원당떡집": { region: "제주시", address: "제주시 삼양동", phone: "010-4755-3310" },
-            "원조함덕떡방앗간": { region: "동쪽", address: "제주시 조천읍 함덕리", phone: "010-2698-8952" },
-            "웰빙제주보리떡": { region: "제주시", address: "제주시", phone: "010-4114-4589" },
-            "은성떡방앗간": { region: "제주시", address: "제주시", phone: "010-3698-2501" },
-            "익섬떡방앗간": { region: "제주시", address: "제주시", phone: "010-3699-2669" },
-            "인화떡방앗간": { region: "제주시", address: "제주시 인화동", phone: "010-3698-1428" },
-            "장인오메기": { region: "제주시", address: "제주시", phone: "010-3698-4400" },
-            "제일떡방앗간": { region: "제주시", address: "제주시", phone: "010-3697-1334" },
+            "원당떡집": { region: "제주시", address: "제주시 지석14길 7", phone: "010-4755-3310" },
+            "웰빙제주보리떡": { region: "제주시", address: "제주시 독짓골7길 2", phone: "010-4114-4589" },
+            "은성떡방앗간": { region: "제주시", address: "제주시 보성길 24", phone: "010-3698-2501" },
+            "익섬떡방앗간": { region: "제주시", address: "제주시 동문로6길 7", phone: "010-3699-2669" },
+            "인화떡방앗간": { region: "제주시", address: "제주시 고마로11길 4", phone: "010-3698-1428" },
+            "장인오메기": { region: "제주시", address: "제주시 거로중길 37", phone: "010-3698-4400" },
+            "제일떡방앗간": { region: "제주시", address: "제주시 동문로4길 9", phone: "010-3697-1334" },
             "제주곱딱": { region: "제주시", address: "제주 제주시 연무정길 54-1 1층", phone: "010-7158-9559" },
             "제주떡고을": { region: "제주시", address: "태성중2길 32-1", phone: "010-2698-3434" },
             "제주떡집": { region: "제주시", address: "제주시", phone: "010-0000-0000" },
-            "제주민속떡집": { region: "제주시", address: "제주시", phone: "010-3694-6778" },
-            "제주백록오메기": { region: "제주시", address: "제주시", phone: "010-4690-3842" },
-            "제주올레떡집": { region: "제주시", address: "제주시", phone: "010-2736-9365" },
-            "제주촘오메기": { region: "제주시", address: "제주시", phone: "010-9940-1759" },
-            "제주탐나오메기떡": { region: "제주시", address: "제주시", phone: "010-9897-3197" },
-            "제주할망오메기떡": { region: "제주시", address: "제주시", phone: "010-6778-2634" },
-            "(주)범주 동서남북떡": { region: "제주시", address: "제주시", phone: "010-6204-1514" },
-            "코시롱돌코롬": { region: "제주시", address: "제주시", phone: "010-6670-3423" },
-            "콩떡": { region: "제주시", address: "제주시", phone: "010-3017-0567" },
-            "큰일": { region: "제주시", address: "제주시 남광북3길 14-6", phone: "010-3693-7990" },
+            "제주민속떡집": { region: "제주시", address: "제주시 서광로14길 23, 1층", phone: "010-3694-6778" },
+            "제주백록오메기": { region: "제주시", address: "제주시 서광로13길 4", phone: "010-4690-3842" },
+            "제주올레떡집": { region: "제주시", address: "제주시 동광로16길 26", phone: "010-2736-9365" },
+            "제주촘오메기": { region: "제주시", address: "제주시 용화로 7-1", phone: "010-9940-1759" },
+            "제주탐나오메기떡": { region: "제주시", address: "제주시 동문로 10-1", phone: "010-9897-3197" },
+            "제주할망오메기떡": { region: "제주시", address: "제주시 서사로21길 16", phone: "010-6778-2634" },
+            "㈜범주 동서남북떡": { region: "제주시", address: "제주시 서광로22길 20, 2층", phone: "010-6204-1514" },
+            "(주)범주 동서남북떡": { region: "제주시", address: "제주시 서광로22길 20, 2층", phone: "010-6204-1514" },
+            "코시롱돌코롬": { region: "제주시", address: "제주시 중앙로 229", phone: "010-6670-3423" },
+            "콩떡": { region: "제주시", address: "제주시 신산로16길 32", phone: "010-3017-0567" },
             "큰일떡방아": { region: "제주시", address: "제주시 남광북3길 14-6", phone: "010-3693-7990" },
-            "하귀떡방앗간": { region: "서쪽", address: "제주시 애월읍 하귀리", phone: "010-5020-8778" },
-            "하르방떡방": { region: "제주시", address: "제주시", phone: "010-3698-0888" },
+            "큰일": { region: "제주시", address: "제주시 남광북3길 14-6", phone: "010-3693-7990" },
+            "하르방떡방": { region: "제주시", address: "제주시 연삼로 455", phone: "010-3698-0888" },
             "한일": { region: "제주시", address: "제주시 동문로8길 11-2", phone: "010-9840-2901" },
-            "한천식품": { region: "제주시", address: "제주 제주시 관덕로3길 5", phone: "010-3690-3007" },
             "한천떡집": { region: "제주시", address: "제주 제주시 관덕로3길 5", phone: "010-3690-3007" },
-            "해당섬오메기떡방": { region: "제주시", address: "제주시", phone: "010-4696-0459" },
-            "현대": { region: "제주시", address: "제주시 관덕로14길 12", phone: "010-4507-5020" },
+            "한천식품": { region: "제주시", address: "제주 제주시 관덕로3길 5", phone: "010-3690-3007" },
+            "해당섬오메기떡방": { region: "제주시", address: "제주시 박성내서길 16, 1층", phone: "010-4696-0459" },
             "현대떡집": { region: "제주시", address: "제주시 관덕로14길 12", phone: "010-4507-5020" },
-            "화북떡집": { region: "제주시", address: "제주시 화북동", phone: "010-3994-4492" },
+            "현대": { region: "제주시", address: "제주시 관덕로14길 12", phone: "010-4507-5020" },
+            "화북떡집": { region: "제주시", address: "제주시 진남로6길 19", phone: "010-3994-4492" },
 
+            // [신제주]
             "도두떡집": { region: "신제주", address: "제주시 도공로 34-4", phone: "010-9890-8858" },
             "미도": { region: "신제주", address: "제주시 우령2길 22", phone: "010-9840-1146" },
             "반석떡집": { region: "신제주", address: "제주시 신대로10길 24-1", phone: "010-7662-2697" },
             "부자떡집": { region: "신제주", address: "제주시 다랑곶길 9", phone: "010-3602-8245" },
             "수다뜰떡방": { region: "신제주", address: "제주시 다랑곶4길 45", phone: "010-8660-1476" },
-            "신광": { region: "신제주", address: "제주시 성신로 20", phone: "010-3692-3979" },
             "신광떡집": { region: "신제주", address: "제주시 성신로 20", phone: "010-3692-3979" },
+            "신광": { region: "신제주", address: "제주시 성신로 20", phone: "010-3692-3979" },
             "오라떡집": { region: "신제주", address: "제주시 아연로149 연재빌 102호", phone: "010-7179-3321" },
+            "오일장떡집": { region: "신제주", address: "제주시 오일장서길 26 (민속오일시장 내)", phone: "010-8632-4554" },
             "한마음떡집": { region: "신제주", address: "제주시 다랑곶4길 54", phone: "010-4699-8677" },
             "해맑은떡방": { region: "신제주", address: "제주시 과원북2길 54", phone: "010-2699-6468" },
             "행복한떡방": { region: "신제주", address: "제주시 과원북4길 69 효정빌딩3차", phone: "010-8156-3380" },
 
+            // [서쪽]
             "대성떡방앗간": { region: "서쪽", address: "서귀포시 대정읍 영서중로13번길 7", phone: "010-3692-8263" },
-            "대정떡집": { region: "서쪽", address: "서귀포시 대정읍", phone: "010-4199-4854" },
+            "대정떡집": { region: "서쪽", address: "서귀포시 대정읍 상모대서로 19", phone: "010-4199-4854" },
             "대정중앙떡방앗간": { region: "서쪽", address: "서귀포시 대정읍 상모리 3942-3", phone: "010-4696-0496" },
             "대정하모떡집": { region: "서쪽", address: "서귀포시 대정읍 동일하모로149번길 26", phone: "010-5777-6341" },
             "동귀떡방앗간": { region: "서쪽", address: "제주시 애월읍 하귀로 113", phone: "010-6691-3011" },
             "떡보의하루": { region: "서쪽", address: "제주시 우정로 72", phone: "010-4587-7979" },
-            "민영이네떡방아": { region: "서쪽", address: "제주시 한림읍", phone: "010-7673-1661" },
-            "민희방앗간": { region: "서쪽", address: "제주시 한경면", phone: "010-2699-1433" },
-            "부민떡방아": { region: "서쪽", address: "제주시 한림읍", phone: "010-3558-2630" },
-            "산양떡방앗간": { region: "서쪽", address: "제주시 한경면 산양리", phone: "010-5171-5289" },
+            "민영이네떡방아": { region: "서쪽", address: "서귀포시 대정읍 신영로36번길 60-1", phone: "010-7673-1661" },
+            "민희방앗간": { region: "서쪽", address: "서귀포시 안덕면 화순중앙로 71", phone: "010-2699-1433" },
+            "부민떡방아": { region: "서쪽", address: "서귀포시 안덕면 산방로 369", phone: "010-3558-2630" },
+            "산양떡방앗간": { region: "서쪽", address: "제주시 한경면 낙원로 35", phone: "010-5171-5289" },
+            "외도오복떡집": { region: "서쪽", address: "제주시 우정로15길 44-4", phone: "010-3969-0087" },
             "저지떡방앗간": { region: "서쪽", address: "제주시 한경면 중산간서로 3650", phone: "010-2690-0676" },
             "제주기정떡": { region: "서쪽", address: "제주시 애월읍 평화로 2747", phone: "010-2768-7615" },
             "풍년떡집": { region: "서쪽", address: "제주 서귀포시 대정읍 영서중로13번길 9", phone: "010-6620-0081" },
-            "한림우리떡": { region: "서쪽", address: "제주시 한림읍 한림중앙로 38", phone: "010-7432-3150" },
+            "하귀떡방앗간": { region: "서쪽", address: "제주시 애월읍 하귀2길 15", phone: "010-5020-8778" },
             "한림우리떡방앗간": { region: "서쪽", address: "제주시 한림읍 한림중앙로 38", phone: "010-7432-3150" },
+            "한림우리떡": { region: "서쪽", address: "제주시 한림읍 한림중앙로 38", phone: "010-7432-3150" },
 
+            // [동쪽]
             "남문떡방앗간": { region: "동쪽", address: "제주시 구좌읍 김녕남6길 5", phone: "010-2690-4636" },
             "남원떡집": { region: "동쪽", address: "서귀포시 남원읍 남원체육관로 318 남원떡집", phone: "010-3694-5030" },
             "두손떡집": { region: "동쪽", address: "서귀포시 표선면 표선관정로104번길 1", phone: "010-3087-0468" },
             "명성떡방앗간": { region: "동쪽", address: "서귀포시 표선면 표선중앙로90번길 1", phone: "010-3814-2684" },
-            "우리떡방(동남)": { region: "동쪽", address: "서귀포시 성산읍 고성리", phone: "010-8662-3061" },
-            "함덕우리떡집": { region: "동쪽", address: "제주시 조천읍 함덕8길 10", phone: "010-8661-1885" },
+            "서우봉떡집": { region: "동쪽", address: "제주시 조천읍 신북로 504", phone: "010-4086-7833" },
+            "신촌떡방앗간": { region: "동쪽", address: "제주시 조천읍 신촌3길 5-1", phone: "010-5162-1400" },
+            "우리떡방(동남)": { region: "동쪽", address: "서귀포시 성산읍 고성오조로 59", phone: "010-8662-3061" },
             "우리떡방앗간(함덕)": { region: "동쪽", address: "제주시 조천읍 함덕8길 10", phone: "010-8661-1885" },
+            "함덕우리떡집": { region: "동쪽", address: "제주시 조천읍 함덕8길 10", phone: "010-8661-1885" },
+            "원조함덕떡집": { region: "동쪽", address: "제주시 조천읍 함덕19길 1", phone: "010-2698-8952" },
+            "원조함덕떡방앗간": { region: "동쪽", address: "제주시 조천읍 함덕19길 1", phone: "010-2698-8952" },
 
-            "떡마을(서귀)": { region: "서귀포", address: "서귀포시", phone: "010-9555-6353" },
-            "떡마을(서귀포)": { region: "서귀포", address: "서귀포시", phone: "010-9555-6353" },
-            "떡보의하루(서귀포)": { region: "서귀포", address: "서귀포시 동홍로 41", phone: "010-9138-4144" },
+            // [서귀포]
+            "떡마을(서귀)": { region: "서귀포", address: "서귀포시 중정로91번길 33", phone: "010-9555-6353" },
+            "떡마을(서귀포)": { region: "서귀포", address: "서귀포시 중정로91번길 33", phone: "010-9555-6353" },
             "떡보의하루(서귀)": { region: "서귀포", address: "서귀포시 동홍로 41", phone: "010-9138-4144" },
-            "서귀떡방아": { region: "서귀포", address: "서귀포시", phone: "010-3691-9359" },
-            "예담떡집": { region: "서귀포", address: "서귀포시", phone: "010-6483-8909" },
-            "오메기점빵": { region: "서귀포", address: "서귀포시", phone: "010-8629-3298" },
+            "떡보의하루(서귀포)": { region: "서귀포", address: "서귀포시 동홍로 41", phone: "010-9138-4144" },
+            "서귀떡방아": { region: "서귀포", address: "서귀포시 중앙로62번길 13", phone: "010-3691-9359" },
+            "예담떡집": { region: "서귀포", address: "서귀포시 신서귀로97번길 22", phone: "010-6483-8909" },
+            "오메기점빵": { region: "서귀포", address: "서귀포시 일주동로 8559", phone: "010-8629-3298" },
             "오복떡방앗간": { region: "서귀포", address: "서귀포시 중앙로48번길 29", phone: "010-3697-7591" },
-            "일일참": { region: "서귀포", address: "서귀포시", phone: "010-8611-4975" },
-            "정담오메기떡": { region: "서귀포", address: "서귀포시", phone: "010-9593-4656" },
-            "주공방아간": { region: "서귀포", address: "제주 서귀포시 태평로 496-7 동홍4주공아파트", phone: "010-5762-2489" },
+            "일일참": { region: "서귀포", address: "서귀포시 중정로73번길 4", phone: "010-8611-4975" },
+            "정담오메기떡": { region: "서귀포", address: "서귀포시 중산간동로 7941", phone: "010-9593-4656" },
             "주공떡방아간": { region: "서귀포", address: "제주 서귀포시 태평로 496-7 동홍4주공아파트", phone: "010-5762-2489" },
-            "주니네오메기떡(한라궁)": { region: "서귀포", address: "서귀포시", phone: "010-3825-6692" },
+            "주공방아간": { region: "서귀포", address: "제주 서귀포시 태평로 496-7 동홍4주공아파트", phone: "010-5762-2489" },
+            "주니네오메기떡(한라궁)": { region: "서귀포", address: "서귀포시 동홍중앙로52번길 20", phone: "010-3825-6692" },
             "중문떡집": { region: "서귀포", address: "서귀포시 천제연로188번길 5-1 참기름 제분", phone: "010-2978-5000" },
-            "중정로떡방아": { region: "서귀포", address: "서귀포시 중정로", phone: "010-7768-4377" },
-            "평화떡집": { region: "서귀포", address: "서귀포시", phone: "010-9664-6937" },
-            "혜성떡방아": { region: "서귀포", address: "서귀포시", phone: "010-3119-7189" }
+            "중정로떡방아": { region: "서귀포", address: "서귀포시 중정로91번길 33-1", phone: "010-7768-4377" },
+            "평화떡집": { region: "서귀포", address: "서귀포시 중앙로48번길 12", phone: "010-9664-6937" },
+            "혜성떡방아": { region: "서귀포", address: "서귀포시 중정로91번길 19", phone: "010-3119-7189" }
         };
 
         const Icon = ({ name, className = "w-5 h-5" }) => {
@@ -318,15 +325,31 @@
                             setDoc(doc(regionsRef, name), { name, ...info });
                         });
                     } else {
+                        const existingDocs = {};
                         snapshot.forEach(docSnap => {
                             const d = docSnap.data();
                             const key = docSnap.id;
+                            existingDocs[key] = d;
+                            const initInfo = initialMasterData[key];
+                            
+                            // 클라우드에 옛날 짧은 임시 주소가 들어있다면 initialMasterData의 완전한 도로명 주소를 우선 적용
+                            const isOldShortAddress = !d.address || ["제주시", "서귀포시", "제주시 건입동", "제주시 동문시장", "제주시 용담동", "제주시 구남동", "제주시 서사라", "제주시 조천읍 함덕리", "제주시 조천읍 신촌리", "제주시 오일장서길", "제주시 외도일동", "제주시 삼양동", "제주시 인화동", "제주시 애월읍 하귀리", "제주시 화북동", "서귀포시 대정읍", "제주시 한림읍", "제주시 한경면", "제주시 한경면 산양리", "서귀포시 성산읍 고성리", "서귀포시 중정로"].includes(String(d.address).trim());
+
                             merged[key] = {
-                                region: d.region || (merged[key] ? merged[key].region : "미분류"),
-                                address: d.address || (merged[key] ? merged[key].address : ""),
-                                phone: d.phone || (merged[key] ? merged[key].phone : "")
+                                region: initInfo ? initInfo.region : (d.region || "미분류"),
+                                address: (isOldShortAddress && initInfo && initInfo.address) ? initInfo.address : (d.address || (initInfo ? initInfo.address : "")),
+                                phone: d.phone || (initInfo ? initInfo.phone : "")
                             };
                         });
+
+                        // initialMasterData 중 클라우드에 누락되었거나 주소가 보강된 항목 자동 동기화
+                        Object.entries(initialMasterData).forEach(([name, info]) => {
+                            const ex = existingDocs[name];
+                            if (!ex || ex.address !== info.address || ex.region !== info.region) {
+                                setDoc(doc(regionsRef, name), { name, ...info });
+                            }
+                        });
+
                         setMasterData(merged);
                     }
                 }, (error) => console.error("Regions sync error:", error));
@@ -670,8 +693,8 @@
                             name: cleanName,
                             rep: item.rep || "",
                             region: (master.region) ? master.region : ((item.region && item.region !== "미분류") ? item.region : "미분류"),
-                            address: item.address || master.address || "",
-                            phone: item.phone || master.phone || phoneFromRow || "",
+                            address: master.address || item.address || "",
+                            phone: master.phone || item.phone || phoneFromRow || "",
                             sacks: sacks,
                             usSacks: usSacks > 0 ? usSacks : ""
                         });
@@ -1264,12 +1287,17 @@
 
                         {activeTab === 'my_delivery' && (() => {
                             const activeDoc = history.find(h => h.id === selectedDeliveryDocId) || history[0] || null;
-                            const allRows = activeDoc ? activeDoc.data.map((r, i) => ({
-                                ...r,
-                                origIdx: i,
-                                resolvedRegion: (r.region && masterData[r.name]) ? masterData[r.name].region : (r.region || '미분류'),
-                                totalRowSacks: (Number(r.sacks) || 0) + (Number(r.usSacks) || 0)
-                            })) : [];
+                            const allRows = activeDoc ? activeDoc.data.map((r, i) => {
+                                const m = masterData[r.name] || {};
+                                return {
+                                    ...r,
+                                    origIdx: i,
+                                    resolvedRegion: m.region || r.region || '미분류',
+                                    address: m.address || r.address || '',
+                                    phone: m.phone || r.phone || '',
+                                    totalRowSacks: (Number(r.sacks) || 0) + (Number(r.usSacks) || 0)
+                                };
+                            }) : [];
 
                             const filteredRows = deliveryRegionFilter === '전체'
                                 ? allRows
