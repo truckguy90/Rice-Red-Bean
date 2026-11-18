@@ -110,7 +110,6 @@
             "새서울떡집": { region: "제주시", address: "제주시 동광로1길 25, 1층", phone: "010-5758-6002" },
             "서사라": { region: "제주시", address: "제주시 서광로13길 7", phone: "010-4665-2188" },
             "섬나라오메기": { region: "제주시", address: "제주시 중앙로 358,1층", phone: "010-3375-4545" },
-            "설나라오메기": { region: "제주시", address: "제주시 중앙로 358,1층", phone: "010-3375-4545" },
             "섬나라": { region: "제주시", address: "제주시 중앙로 358,1층", phone: "010-3107-6699" },
             "성도떡집": { region: "제주시", address: "제주시 남성로8길 5", phone: "010-9536-3339" },
             "성도": { region: "제주시", address: "제주시 남성로8길 5", phone: "010-9536-3339" },
@@ -185,7 +184,7 @@
             "대정하모떡집": { region: "서쪽", address: "서귀포시 대정읍 동일하모로149번길 26", phone: "010-5777-6341" },
             "동귀떡방앗간": { region: "서쪽", address: "제주시 애월읍 하귀로 113", phone: "010-6691-3011" },
             "떡보의하루": { region: "서쪽", address: "제주시 우정로 72", phone: "010-4587-7979" },
-            "민영이네떡방아": { region: "서쪽", address: "서귀포시 대정읍 신영로36번길 60-1", phone: "010-7673-1661" },
+            "민영이네떡방아": { region: "서귀포", address: "서귀포시 서문로29번길 3", phone: "010-7673-1661" },
             "민희방앗간": { region: "서쪽", address: "서귀포시 안덕면 화순중앙로 71", phone: "010-2699-1433" },
             "부민떡방아": { region: "서쪽", address: "서귀포시 안덕면 산방로 369", phone: "010-3558-2630" },
             "산양떡방앗간": { region: "서쪽", address: "제주시 한경면 낙원로 35", phone: "010-5171-5289" },
@@ -970,6 +969,84 @@
                 }
             };
 
+            const handleMasterExcelUpload = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = async (evt) => {
+                    try {
+                        const bstr = evt.target.result;
+                        const wb = XLSX.read(bstr, { type: 'binary' });
+                        const ws = wb.Sheets[wb.SheetNames[0]];
+                        const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+                        let headerIdx = -1;
+                        let colMap = {};
+
+                        // Find headers
+                        for (let i = 0; i < data.length; i++) {
+                            const row = data[i];
+                            if (!row || !Array.isArray(row)) continue;
+                            const rowStr = row.join(" ");
+                            if (rowStr.includes("상호") || rowStr.includes("떡집명") || rowStr.includes("업체명")) {
+                                headerIdx = i;
+                                row.forEach((val, idx) => {
+                                    if (val) {
+                                        const cleanVal = String(val).replace(/\s+/g, "");
+                                        if (cleanVal.includes("상호") || cleanVal.includes("업체명") || cleanVal.includes("떡집명")) colMap.name = idx;
+                                        else if (cleanVal.includes("주소")) colMap.address = idx;
+                                        else if (cleanVal.includes("전화") || cleanVal.includes("연락처")) colMap.phone = idx;
+                                    }
+                                });
+                                break;
+                            }
+                        }
+
+                        if (headerIdx === -1 || colMap.name === undefined) {
+                            showToast("엑셀 명단에서 '상호' 열을 찾을 수 없습니다.", "error");
+                            return;
+                        }
+
+                        let successCount = 0;
+                        for (let i = headerIdx + 1; i < data.length; i++) {
+                            const row = data[i];
+                            if (!row || !row[colMap.name]) continue;
+
+                            const name = String(row[colMap.name]).trim();
+                            if (!name) continue;
+
+                            const address = colMap.address !== undefined && row[colMap.address] ? String(row[colMap.address]).trim() : "";
+                            const phone = colMap.phone !== undefined && row[colMap.phone] ? String(row[colMap.phone]).trim() : "";
+
+                            // Keep existing region if exists, else "미분류"
+                            let region = "미분류";
+                            if (masterData[name] && masterData[name].region) {
+                                region = masterData[name].region;
+                            }
+
+                            const newEntry = { name, region, address, phone };
+
+                            if (user && fbApi) {
+                                const { db, doc, setDoc } = fbApi;
+                                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'regions', name);
+                                await setDoc(docRef, newEntry);
+                            } else {
+                                setMasterData(prev => ({ ...prev, [name]: newEntry }));
+                            }
+                            successCount++;
+                        }
+
+                        showToast(`총 ${successCount}개 하차지 진짜 주소 덮어쓰기 완료!`, "success");
+                    } catch (err) {
+                        console.error("Master upload error:", err);
+                        showToast("엑셀 명단 처리 중 오류가 발생했습니다.", "error");
+                    }
+                };
+                reader.readAsBinaryString(file);
+                e.target.value = null;
+            };
+
             const filteredStats = useMemo(() => {
                 let filtered = history.filter(item => {
                     const matchMonth = filterMonth === 'ALL' || item.month === filterMonth;
@@ -1522,8 +1599,25 @@
                             <div className="space-y-4">
                                 <h2 className="text-lg font-extrabold text-stone-800 px-1">하차지 목록</h2>
                                 
+                                <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-[24px] shadow-sm mb-4">
+                                    <h3 className="text-xs font-extrabold text-emerald-800 mb-2 flex items-center">
+                                        <Icon name="file-spreadsheet" />
+                                        <span className="ml-1.5">진짜 엑셀 명단으로 전체 주소 덮어쓰기</span>
+                                    </h3>
+                                    <p className="text-[11px] text-emerald-600 mb-3 font-medium">
+                                        사장님이 보유하신 원본 <strong>[떡집명단 엑셀파일]</strong>을 올리면 주소와 전화번호가 오타 없이 정확하게 100% 자동 동기화됩니다.
+                                    </p>
+                                    <div className="file-input-wrapper w-full">
+                                        <button className="w-full bg-emerald-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-emerald-700 transition active:scale-95 text-xs flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-200">
+                                            <Icon name="upload" className="w-4 h-4" />
+                                            <span>떡집명단 엑셀 파일 올리기</span>
+                                        </button>
+                                        <input type="file" accept=".xlsx, .xls" onChange={handleMasterExcelUpload} />
+                                    </div>
+                                </div>
+
                                 <div className="bg-[#fffdfa] p-4 rounded-[24px] shadow-sm border border-[#e6dfd5]">
-                                    <h3 className="text-xs font-extrabold text-stone-700 mb-2.5 flex items-center"><Icon name="plus-circle" /><span className="ml-1.5">신규/수정 하차지 등록</span></h3>
+                                    <h3 className="text-xs font-extrabold text-stone-700 mb-2.5 flex items-center"><Icon name="plus-circle" /><span className="ml-1.5">신규/수정 하차지 개별 등록</span></h3>
                                     <form onSubmit={addRegion} className="space-y-2">
                                         <div className="flex gap-2">
                                             <input type="text" placeholder="상호명 (필수)" value={newCompName} onChange={e=>setNewCompName(e.target.value)} className="flex-1 min-w-0 bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2.5 text-xs font-medium outline-none focus:bg-white focus:border-stone-500"/>
