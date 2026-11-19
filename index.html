@@ -4,38 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Rice Red Bean - 제주 떡집 물류 권역 분류</title>
-    
-    <!-- PWA & Mobile App Meta Tags -->
+
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Rice Red Bean">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#f5f2eb">
-    
-    <!-- App Icon (Inline SVG) -->
+
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%2344403c'/><text x='50%' y='55%' dominant-baseline='central' text-anchor='middle' font-size='55'>🌾</text></svg>">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%2344403c'/><text x='50%' y='55%' dominant-baseline='central' text-anchor='middle' font-size='55'>🌾</text></svg>">
 
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- SheetJS Style (xlsx-js-style) for Styled Excel Read/Write -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
-    <!-- Firebase Compat SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
     <style>
         @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-        body { 
-            font-family: 'Pretendard', sans-serif; 
-            -webkit-tap-highlight-color: transparent; 
-            background-color: #e8e4dc; 
+        body {
+            font-family: 'Pretendard', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            background-color: #e8e4dc;
         }
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -50,7 +43,6 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // 1. Firebase 실제 프로젝트 설정 (riceredbean-743a0)
         const FIREBASE_CONFIG = {
             apiKey: "AIzaSyBj8x8nUPrTp9Y2fpaVT3zwFYpQ7XwPNyM",
             authDomain: "riceredbean-743a0.firebaseapp.com",
@@ -63,24 +55,266 @@
         const LOCAL_MASTER_KEY = 'rice_red_bean_master_v3';
         const LOCAL_HISTORY_KEY = 'rice_red_bean_history_v3';
         const LOCAL_AUTO_DL_KEY = 'rice_red_bean_auto_dl_v3';
+        const REGIONS_ORDER = ['제주시', '신제주', '서쪽', '동쪽', '서귀포', '미분류'];
 
-        // 현재 연-월 기본값 (YYYY-MM)
         const getCurrentYearMonth = () => {
             const now = new Date();
             return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         };
 
-        // 안전한 정수 추출기 ("20포(400kg)" -> 20, "10.0" -> 10, "1,200" -> 1200)
+        const parseYearMonthFromFileName = (fileName) => {
+            const name = String(fileName || '');
+            const candidates = [
+                { regex: /(?:20)?(\d{2})년\s*(\d{1,2})월/, toYear: (y) => 2000 + Number(y) },
+                { regex: /(20\d{2})[-._]?(\d{1,2})/, toYear: (y) => Number(y) },
+                { regex: /(\d{2})[-._](\d{1,2})/, toYear: (y) => 2000 + Number(y) },
+                { regex: /_(\d{2})(\d{2})\d{2}/, toYear: (y) => 2000 + Number(y) }
+            ];
+
+            for (const { regex, toYear } of candidates) {
+                const match = name.match(regex);
+                if (!match) continue;
+                const year = toYear(match[1]);
+                const month = Number(match[2]);
+                if (year >= 2000 && year <= 2099 && month >= 1 && month <= 12) {
+                    return `${year}-${String(month).padStart(2, '0')}`;
+                }
+            }
+            return getCurrentYearMonth();
+        };
+
         const parseSafeInt = (val) => {
             if (val === null || val === undefined || val === '') return 0;
             if (typeof val === 'number') return Number.isFinite(val) ? Math.round(val) : 0;
             const str = String(val).replace(/,/g, '').trim();
-            const match = str.match(/^\d+(?:\.\d+)?/);
-            if (!match) return 0;
-            return Math.round(Number(match[0])) || 0;
+            const sackMatch = str.match(/(\d+(?:\.\d+)?)\s*포/);
+            const numMatch = sackMatch || str.match(/(\d+(?:\.\d+)?)/);
+            if (!numMatch) return 0;
+            return Math.round(Number(numMatch[1])) || 0;
         };
 
-        // 2. React 전용 순수 SVG 아이콘 (DOM 충돌 원천 차단)
+        const extractJsonBlocks = (rawText) => {
+            const cleaned = String(rawText || '')
+                .replace(/```(?:json|csv|tsv|text)?/gi, '')
+                .replace(/```/g, '')
+                .trim();
+
+            const blocks = [];
+            let i = 0;
+
+            while (i < cleaned.length) {
+                const ch = cleaned[i];
+                if (ch !== '{' && ch !== '[') {
+                    i++;
+                    continue;
+                }
+
+                const start = i;
+                const stack = [ch === '{' ? '}' : ']'];
+                let inString = false;
+                let escaped = false;
+                i++;
+
+                while (i < cleaned.length && stack.length > 0) {
+                    const c = cleaned[i];
+                    if (inString) {
+                        if (escaped) {
+                            escaped = false;
+                        } else if (c === '\\') {
+                            escaped = true;
+                        } else if (c === '"') {
+                            inString = false;
+                        }
+                    } else if (c === '"') {
+                        inString = true;
+                    } else if (c === '{') {
+                        stack.push('}');
+                    } else if (c === '[') {
+                        stack.push(']');
+                    } else if (c === '}' || c === ']') {
+                        if (stack[stack.length - 1] === c) {
+                            stack.pop();
+                        } else {
+                            return { error: "JSON 괄호 짝이 맞지 않습니다. 복사 시 잘린 부분이 있는지 확인해 주세요." };
+                        }
+                    }
+                    i++;
+                }
+
+                if (stack.length !== 0) {
+                    return { error: "JSON 형식이 끝까지 복사되지 않았습니다. 마지막 괄호를 확인해 주세요." };
+                }
+
+                try {
+                    blocks.push(JSON.parse(cleaned.slice(start, i)));
+                } catch (e) {
+                    return { error: "JSON 형식이 깨져 있습니다. 따옴표나 쉼표가 잘렸는지 확인해 주세요." };
+                }
+            }
+
+            if (blocks.length === 0) return null;
+
+            const mergedItems = [];
+            let summedTotal = 0;
+            let hasEmbeddedTotal = false;
+
+            for (const block of blocks) {
+                if (Array.isArray(block)) {
+                    mergedItems.push(...block);
+                } else if (block && typeof block === 'object' && Array.isArray(block.items)) {
+                    mergedItems.push(...block.items);
+                    const totalVal = parseSafeInt(block.expectedTotal ?? block.totalSacks ?? block.합계);
+                    if (totalVal > 0) {
+                        summedTotal += totalVal;
+                        hasEmbeddedTotal = true;
+                    }
+                }
+            }
+
+            if (mergedItems.length === 0) return null;
+            return { items: mergedItems, embeddedTotal: hasEmbeddedTotal ? summedTotal : null };
+        };
+
+        const inferRegionByAddress = (address = "") => {
+            const addr = String(address).trim();
+            if (!addr) return "미분류";
+            if (addr.includes("애월") || addr.includes("한림") || addr.includes("한경") || addr.includes("대정") || addr.includes("안덕") || addr.includes("우정로") || addr.includes("외도")) {
+                return "서쪽";
+            }
+            if (addr.includes("조천") || addr.includes("구좌") || addr.includes("성산") || addr.includes("표선") || addr.includes("남원")) {
+                return "동쪽";
+            }
+            if (addr.includes("서귀포")) {
+                return "서귀포";
+            }
+            const shinJejuKeywords = [
+                "다랑곶", "과원", "신대로", "도공로", "오일장", "성신로", "우령", "아연로",
+                "노형", "연동", "노연로", "원노형", "수덕로", "정존", "월랑로",
+                "한라대학로", "신광로", "삼무로", "도령로", "연북로", "제원"
+            ];
+            if (shinJejuKeywords.some(k => addr.includes(k))) {
+                return "신제주";
+            }
+            if (addr.includes("제주시")) {
+                return "제주시";
+            }
+            return "미분류";
+        };
+
+        const stripShopSuffix = (str) => String(str || "")
+            .replace(/\s+/g, "")
+            .replace(/\(주\)|㈜/g, "")
+            .replace(/(떡방앗간|떡방아간|떡방아|떡방|떡집|방앗간|방아간|오메기떡|오메기|식품|양과)/g, "");
+
+        const findSmartMasterInMap = (masterMap, rawName, rawRep = "", rawPhone = "", rawAddr = "") => {
+            const cleanName = String(rawName || "").trim();
+            const noSpaceName = cleanName.replace(/\s+/g, "");
+            const cleanRep = String(rawRep || "").replace(/외\s*\d+명?|\s+/g, "").trim();
+            const cleanPhone = String(rawPhone || "").replace(/[^0-9]/g, "");
+            const cleanAddr = String(rawAddr || "").replace(/\s+/g, "");
+            const coreTarget = stripShopSuffix(cleanName);
+
+            if (masterMap[cleanName]) return { ...masterMap[cleanName], name: cleanName };
+            const entries = Object.entries(masterMap);
+            for (const [k, info] of entries) {
+                if (k.replace(/\s+/g, "") === noSpaceName) return { ...info, name: k };
+            }
+
+            if (cleanPhone.length >= 8) {
+                const tail = cleanPhone.slice(-8);
+                for (const [k, info] of entries) {
+                    const mPhone = String(info.phone || "").replace(/[^0-9]/g, "");
+                    if (mPhone.length >= 8 && mPhone.slice(-8) === tail) {
+                        return { ...info, name: k };
+                    }
+                }
+            }
+
+            if (cleanRep.length >= 2) {
+                const repMatches = entries.filter(([, info]) => {
+                    const mRep = String(info.rep || "").replace(/외\s*\d+명?|\s+/g, "").trim();
+                    return mRep && (mRep === cleanRep || mRep.includes(cleanRep) || cleanRep.includes(mRep));
+                });
+
+                if (repMatches.length === 1) {
+                    return { ...repMatches[0][1], name: repMatches[0][0] };
+                } else if (repMatches.length > 1) {
+                    for (const [k, info] of repMatches) {
+                        const cKey = stripShopSuffix(k);
+                        if (coreTarget.length >= 2 && cKey && (cKey.includes(coreTarget) || coreTarget.includes(cKey))) {
+                            return { ...info, name: k };
+                        }
+                        const mAddr = String(info.address || "").replace(/\s+/g, "");
+                        if (cleanAddr.length >= 4 && mAddr && (mAddr.includes(cleanAddr) || cleanAddr.includes(mAddr))) {
+                            return { ...info, name: k };
+                        }
+                    }
+                }
+            }
+
+            if (coreTarget.length >= 2) {
+                for (const [k, info] of entries) {
+                    const cKey = stripShopSuffix(k);
+                    if (cKey && cKey === coreTarget) {
+                        return { ...info, name: k };
+                    }
+                }
+            }
+
+            if (cleanAddr.length >= 6) {
+                for (const [k, info] of entries) {
+                    const mAddr = String(info.address || "").replace(/\s+/g, "");
+                    if (mAddr.length >= 6 && (mAddr.includes(cleanAddr) || cleanAddr.includes(mAddr))) {
+                        return { ...info, name: k };
+                    }
+                }
+            }
+
+            return null;
+        };
+
+        const resolveRowWithMaster = (row, masterMap) => {
+            const master = findSmartMasterInMap(masterMap, row.name, row.rep, row.phone, row.address);
+            const address = (master && master.address) ? master.address : (row.address || "");
+            const region = (master && master.region && master.region !== "미분류")
+                ? master.region
+                : ((row.region && row.region !== "미분류") ? row.region : inferRegionByAddress(address));
+
+            return {
+                master,
+                name: (master && master.name) ? master.name : String(row.name || "").trim(),
+                rep: row.rep || (master && master.rep ? master.rep : ""),
+                address,
+                phone: (master && master.phone) ? master.phone : (row.phone || ""),
+                region
+            };
+        };
+
+        const serializeHistoryDoc = (docObj) => ({
+            fileName: docObj.fileName,
+            itemType: docObj.itemType || '쌀',
+            yearMonth: docObj.yearMonth,
+            uploadDate: docObj.uploadDate,
+            timestamp: docObj.timestamp,
+            totalSacks: docObj.totalSacks,
+            totalKrSacks: docObj.totalKrSacks ?? docObj.totalSacks,
+            totalUsSacks: docObj.totalUsSacks ?? 0,
+            expectedTotal: docObj.expectedTotal ?? null,
+            totalMismatch: Boolean(docObj.totalMismatch),
+            unclassifiedCount: docObj.unclassifiedCount || 0,
+            unregisteredList: docObj.unregisteredList || [],
+            typoList: docObj.typoList || [],
+            recordsJson: JSON.stringify(docObj.data || [])
+        });
+
+        const getEffectiveMySacks = (row) => {
+            if (!row || !row.completed) return 0;
+            if (row.mySacks !== undefined && row.mySacks !== null) {
+                return Number(row.mySacks) || 0;
+            }
+            return (Number(row.sacks) || 0) + (Number(row.usSacks) || 0);
+        };
+
         const ICON_PATHS = {
             'upload-cloud': '<path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/>',
             'check-square': '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
@@ -104,6 +338,7 @@
             'search': '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
             'copy': '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
             'phone': '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>',
+            'lock': '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
             'x': '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'
         };
 
@@ -124,57 +359,57 @@
         );
 
         const copyTextSafe = async (text) => {
-            try {
-                if (navigator.clipboard && window.isSecureContext) {
+            if (navigator.clipboard && window.isSecureContext) {
+                try {
                     await navigator.clipboard.writeText(text);
                     return true;
-                }
-            } catch (e) {}
+                } catch (_) {}
+            }
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            return Boolean(ok);
+        };
+
+        const readLocalJson = (primaryKey, fallbackKey, defaultValue) => {
             try {
-                const ta = document.createElement('textarea');
-                ta.value = text;
-                ta.style.position = 'fixed';
-                ta.style.opacity = '0';
-                document.body.appendChild(ta);
-                ta.select();
-                document.execCommand('copy');
-                document.body.removeChild(ta);
-                return true;
-            } catch (e) {
-                return false;
+                const saved = localStorage.getItem(primaryKey) || (fallbackKey ? localStorage.getItem(fallbackKey) : null);
+                return saved ? JSON.parse(saved) : defaultValue;
+            } catch (_) {
+                return defaultValue;
             }
         };
 
         function App() {
             const [activeTab, setActiveTab] = useState('upload');
-            const [dbStatus, setDbStatus] = useState('connecting'); // 'connected' | 'local' | 'quota' | 'denied'
+            const [authUser, setAuthUser] = useState(undefined);
+            const [showAuthModal, setShowAuthModal] = useState(false);
+            const [loginEmail, setLoginEmail] = useState('');
+            const [loginPassword, setLoginPassword] = useState('');
+            const [authSubmitting, setAuthSubmitting] = useState(false);
+
+            const [dbStatus, setDbStatus] = useState('connecting');
             const [dbErrorMsg, setDbErrorMsg] = useState('');
             const dbRef = useRef(null);
 
-            const [masterData, setMasterData] = useState(() => {
-                try {
-                    const saved = localStorage.getItem(LOCAL_MASTER_KEY) || localStorage.getItem('rice_red_bean_master_v2');
-                    return saved ? JSON.parse(saved) : {};
-                } catch (e) { return {}; }
-            });
-            const [history, setHistory] = useState(() => {
-                try {
-                    const saved = localStorage.getItem(LOCAL_HISTORY_KEY) || localStorage.getItem('rice_red_bean_history_v2');
-                    return saved ? JSON.parse(saved) : [];
-                } catch (e) { return []; }
-            });
+            const [masterData, setMasterData] = useState(() => readLocalJson(LOCAL_MASTER_KEY, 'rice_red_bean_master_v2', {}));
+            const [history, setHistory] = useState(() => readLocalJson(LOCAL_HISTORY_KEY, 'rice_red_bean_history_v2', []));
 
-            const [currentDoc, setCurrentDoc] = useState(null);
+            const [currentDocId, setCurrentDocId] = useState(null);
             const [selectedDeliveryDocId, setSelectedDeliveryDocId] = useState('');
             const [deliveryRegionFilter, setDeliveryRegionFilter] = useState('전체');
             const [deliveryViewMode, setDeliveryViewMode] = useState('table');
 
             const [selectedItemType, setSelectedItemType] = useState('쌀');
             const [autoDownloadExcel, setAutoDownloadExcel] = useState(() => {
-                try { return localStorage.getItem(LOCAL_AUTO_DL_KEY) === 'true'; } catch (e) { return false; }
+                try { return localStorage.getItem(LOCAL_AUTO_DL_KEY) === 'true'; } catch (_) { return false; }
             });
 
-            // 제미나이 붙여넣기 모달 상태 (귀속 연·월 + 팩스 총합계 검산 추가)
             const [showPasteModal, setShowPasteModal] = useState(false);
             const [pasteText, setPasteText] = useState('');
             const [pasteYearMonth, setPasteYearMonth] = useState(getCurrentYearMonth);
@@ -200,267 +435,193 @@
                 toastTimerRef.current = setTimeout(() => setToast(null), 4000);
             };
 
+            const writeLocalStorage = (key, value) => {
+                try {
+                    localStorage.setItem(key, value);
+                    return true;
+                } catch (err) {
+                    showToast(`기기 저장 공간 오류로 로컬 백업에 실패했습니다 (${err.name || 'StorageError'}).`, 'error');
+                    return false;
+                }
+            };
+
+            const currentDoc = useMemo(
+                () => history.find(h => h.id === currentDocId) || null,
+                [history, currentDocId]
+            );
+
             useEffect(() => {
-                try { localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(history)); } catch (e) {}
+                writeLocalStorage(LOCAL_HISTORY_KEY, JSON.stringify(history));
                 if (history.length > 0 && !selectedDeliveryDocId) {
                     setSelectedDeliveryDocId(history[0].id);
                 }
             }, [history]);
 
             useEffect(() => {
-                try { localStorage.setItem(LOCAL_AUTO_DL_KEY, String(autoDownloadExcel)); } catch (e) {}
+                writeLocalStorage(LOCAL_AUTO_DL_KEY, String(autoDownloadExcel));
             }, [autoDownloadExcel]);
 
-            // 3. Firebase 초기화 및 초절약 동기화 (익명 로그인 + 명단 1문서 통합 저장)
             useEffect(() => {
-                let unsubMaster = null;
-                let unsubHistory = null;
-                let isMounted = true;
+                if (typeof firebase === 'undefined') {
+                    setAuthUser(null);
+                    setDbStatus('local');
+                    setDbErrorMsg('Firebase SDK를 불러오지 못했습니다.');
+                    return;
+                }
 
-                const startCloudSync = async () => {
-                    try {
-                        if (typeof firebase === 'undefined') {
-                            setDbStatus('local');
-                            setDbErrorMsg('Firebase SDK를 불러오지 못했습니다.');
-                            return;
-                        }
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(FIREBASE_CONFIG);
+                }
 
-                        if (!firebase.apps.length) {
-                            firebase.initializeApp(FIREBASE_CONFIG);
-                        }
+                const auth = firebase.auth();
+                const firestore = firebase.firestore();
+                firestore.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+                dbRef.current = firestore;
 
-                        if (firebase.auth) {
-                            try {
-                                await firebase.auth().signInAnonymously();
-                            } catch (authErr) {
-                                console.warn("Anonymous auth skipped:", authErr.code);
-                            }
-                        }
+                const unsubAuth = auth.onAuthStateChanged((user) => {
+                    setAuthUser(user || null);
+                    if (!user) {
+                        setDbStatus('auth_required');
+                        setDbErrorMsg('클라우드 동기화를 위해 로그인이 필요합니다.');
+                        setShowAuthModal(true);
+                    }
+                });
 
-                        if (!isMounted) return;
+                return () => unsubAuth();
+            }, []);
 
-                        const firestore = firebase.firestore();
-                        firestore.enablePersistence({ synchronizeTabs: true }).catch(() => {});
-                        dbRef.current = firestore;
+            useEffect(() => {
+                if (!authUser || !dbRef.current) return;
 
-                        const handleSyncError = (err) => {
-                            console.warn("Firestore sync error:", err);
-                            const code = err && err.code ? err.code : 'unknown';
-                            if (code === 'resource-exhausted') {
-                                setDbStatus('quota');
-                                setDbErrorMsg('오늘 무료 쓰기/읽기 한도(2만 건) 초과. 오후 4~5시 초기화됩니다.');
-                            } else if (code === 'permission-denied') {
-                                setDbStatus('denied');
-                                setDbErrorMsg('파이어베이스 보안 규칙(Rules)에서 접근이 차단되었습니다.');
-                            } else {
-                                setDbStatus('local');
-                                setDbErrorMsg(`연결 오류 (${code}): 오프라인/로컬 모드로 작동 중`);
-                            }
-                        };
+                const firestore = dbRef.current;
+                setDbStatus('connecting');
 
-                        unsubMaster = firestore.collection('rrb_master').doc('all_shops').onSnapshot((docSnap) => {
-                            setDbStatus('connected');
-                            setDbErrorMsg('');
-                            if (docSnap.exists) {
-                                const d = docSnap.data();
-                                if (d && d.shopsJson) {
-                                    try {
-                                        const parsed = JSON.parse(d.shopsJson);
-                                        setMasterData(parsed);
-                                        localStorage.setItem(LOCAL_MASTER_KEY, JSON.stringify(parsed));
-                                    } catch (e) {}
-                                }
-                            }
-                        }, handleSyncError);
-
-                        unsubHistory = firestore.collection('rrb_history').onSnapshot((snapshot) => {
-                            setDbStatus('connected');
-                            setDbErrorMsg('');
-                            const loaded = [];
-                            snapshot.forEach(docSnap => {
-                                const d = docSnap.data();
-                                let parsedRows = [];
-                                try { parsedRows = JSON.parse(d.recordsJson || "[]"); } catch (e) {}
-                                loaded.push({
-                                    ...d,
-                                    id: docSnap.id,
-                                    data: parsedRows
-                                });
-                            });
-                            loaded.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                            setHistory(loaded);
-                            if (loaded.length > 0) {
-                                setSelectedDeliveryDocId(prev => prev || loaded[0].id);
-                            }
-                        }, handleSyncError);
-                    } catch (e) {
-                        console.error("Firebase init failed:", e);
+                const handleSyncError = (err) => {
+                    const code = err && err.code ? err.code : 'unknown';
+                    if (code === 'resource-exhausted') {
+                        setDbStatus('quota');
+                        setDbErrorMsg('오늘 무료 쓰기/읽기 한도(2만 건) 초과. 오후 4~5시 초기화됩니다.');
+                    } else if (code === 'permission-denied') {
+                        setDbStatus('denied');
+                        setDbErrorMsg('Firestore 보안 규칙에서 현재 계정의 UID가 허용되지 않았습니다.');
+                    } else {
                         setDbStatus('local');
-                        setDbErrorMsg(`초기화 오류: ${e.message}`);
+                        setDbErrorMsg(`연결 오류 (${code}): 오프라인/로컬 모드로 작동 중`);
                     }
                 };
 
-                startCloudSync();
+                const unsubMaster = firestore.collection('rrb_master').doc('all_shops').onSnapshot((docSnap) => {
+                    setDbStatus('connected');
+                    setDbErrorMsg('');
+                    if (docSnap.exists) {
+                        const d = docSnap.data();
+                        if (d && d.shopsJson) {
+                            try {
+                                const parsed = JSON.parse(d.shopsJson);
+                                setMasterData(parsed);
+                                writeLocalStorage(LOCAL_MASTER_KEY, JSON.stringify(parsed));
+                            } catch (_) {
+                                showToast("클라우드 명단 데이터 형식이 손상되었습니다.", "error");
+                            }
+                        }
+                    }
+                }, handleSyncError);
+
+                const unsubHistory = firestore.collection('rrb_history').onSnapshot((snapshot) => {
+                    setDbStatus('connected');
+                    setDbErrorMsg('');
+                    const loaded = [];
+                    snapshot.forEach(docSnap => {
+                        const d = docSnap.data();
+                        let parsedRows = [];
+                        try { parsedRows = JSON.parse(d.recordsJson || "[]"); } catch (_) {}
+                        loaded.push({ ...d, id: docSnap.id, data: parsedRows });
+                    });
+                    loaded.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                    setHistory(loaded);
+                    if (loaded.length > 0) {
+                        setSelectedDeliveryDocId(prev => prev || loaded[0].id);
+                    }
+                }, handleSyncError);
 
                 return () => {
-                    isMounted = false;
-                    if (unsubMaster) unsubMaster();
-                    if (unsubHistory) unsubHistory();
+                    unsubMaster();
+                    unsubHistory();
                 };
-            }, []);
+            }, [authUser]);
+
+            const handleEmailLogin = async (e) => {
+                e.preventDefault();
+                if (!loginEmail.trim() || !loginPassword) {
+                    showToast("이메일과 비밀번호를 입력해 주세요.", "error");
+                    return;
+                }
+                setAuthSubmitting(true);
+                try {
+                    await firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+                    await firebase.auth().signInWithEmailAndPassword(loginEmail.trim(), loginPassword);
+                    setLoginPassword('');
+                    setShowAuthModal(false);
+                    showToast("로그인 완료! 클라우드와 동기화합니다.", "success");
+                } catch (err) {
+                    const code = err && err.code ? err.code : '';
+                    if (code === 'auth/wrong-password' || code === 'auth/invalid-credential' || code === 'auth/user-not-found') {
+                        showToast("이메일 또는 비밀번호가 일치하지 않습니다.", "error");
+                    } else if (code === 'auth/invalid-email') {
+                        showToast("이메일 형식이 올바르지 않습니다.", "error");
+                    } else {
+                        showToast(`로그인 실패 (${code || err.message})`, "error");
+                    }
+                } finally {
+                    setAuthSubmitting(false);
+                }
+            };
+
+            const handleLogout = async () => {
+                try {
+                    await firebase.auth().signOut();
+                    setShowAuthModal(false);
+                    showToast("로그아웃되었습니다. 로컬 모드로 전환됩니다.", "info");
+                } catch (err) {
+                    showToast(`로그아웃 오류: ${err.message}`, "error");
+                }
+            };
 
             const saveMasterToCloud = async (nextMaster) => {
                 setMasterData(nextMaster);
-                try { localStorage.setItem(LOCAL_MASTER_KEY, JSON.stringify(nextMaster)); } catch (e) {}
+                writeLocalStorage(LOCAL_MASTER_KEY, JSON.stringify(nextMaster));
 
-                if (dbRef.current) {
-                    try {
-                        await dbRef.current.collection('rrb_master').doc('all_shops').set({
-                            shopsJson: JSON.stringify(nextMaster),
-                            count: Object.keys(nextMaster).length,
-                            updatedAt: Date.now()
-                        });
-                        setDbStatus('connected');
-                        return true;
-                    } catch (err) {
-                        console.error("Save master cloud error:", err);
-                        if (err.code === 'resource-exhausted') {
-                            setDbStatus('quota');
-                            showToast("오늘 파이어베이스 무료 쓰기 한도 초과로 로컬에만 임시 저장되었습니다.", "error");
-                        }
-                        return false;
-                    }
-                }
-                return false;
-            };
-
-            const getEffectiveMySacks = (row) => {
-                if (!row || !row.completed) return 0;
-                if (row.mySacks !== undefined && row.mySacks !== null) {
-                    return Number(row.mySacks) || 0;
-                }
-                return (Number(row.sacks) || 0) + (Number(row.usSacks) || 0);
-            };
-
-            // 신제주 주요 도로명 보강
-            const inferRegionByAddress = (address = "") => {
-                const addr = String(address).trim();
-                if (!addr) return "미분류";
-                if (addr.includes("애월") || addr.includes("한림") || addr.includes("한경") || addr.includes("대정") || addr.includes("안덕") || addr.includes("우정로") || addr.includes("외도")) {
-                    return "서쪽";
-                }
-                if (addr.includes("조천") || addr.includes("구좌") || addr.includes("성산") || addr.includes("표선") || addr.includes("남원")) {
-                    return "동쪽";
-                }
-                if (addr.includes("서귀포")) {
-                    return "서귀포";
-                }
-                const shinJejuKeywords = [
-                    "다랑곶", "과원", "신대로", "도공로", "오일장", "성신로", "우령", "아연로",
-                    "노형", "연동", "노연로", "원노형", "수덕로", "정존", "월랑로",
-                    "한라대학로", "신광로", "삼무로", "도령로", "연북로", "제원"
-                ];
-                if (shinJejuKeywords.some(k => addr.includes(k))) {
-                    return "신제주";
-                }
-                if (addr.includes("제주시")) {
-                    return "제주시";
-                }
-                return "미분류";
-            };
-
-            // 4. 스마트 매칭 함수 (동명이인 대표자 오매칭 차단)
-            const findSmartMaster = (rawName, rawRep = "", rawPhone = "", rawAddr = "") => {
-                const cleanName = String(rawName || "").trim();
-                const noSpaceName = cleanName.replace(/\s+/g, "");
-                const cleanRep = String(rawRep || "").replace(/외\s*\d+명?|\s+/g, "").trim();
-                const cleanPhone = String(rawPhone || "").replace(/[^0-9]/g, "");
-                const cleanAddr = String(rawAddr || "").replace(/\s+/g, "");
-
-                const stripSuffix = (str) => String(str || "")
-                    .replace(/\s+/g, "")
-                    .replace(/\(주\)|㈜/g, "")
-                    .replace(/(떡방앗간|떡방아간|떡방아|떡방|떡집|방앗간|방아간|오메기떡|오메기|식품|양과)/g, "");
-
-                const coreTarget = stripSuffix(cleanName);
-
-                if (masterData[cleanName]) return { ...masterData[cleanName], name: cleanName };
-                const entries = Object.entries(masterData);
-                for (const [k, info] of entries) {
-                    if (k.replace(/\s+/g, "") === noSpaceName) return { ...info, name: k };
+                if (!authUser || !dbRef.current) {
+                    return { synced: false, reason: '로컬에만 저장됨 (로그인 후 클라우드 동기화)' };
                 }
 
-                if (cleanPhone.length >= 8) {
-                    const tail = cleanPhone.slice(-8);
-                    for (const [k, info] of entries) {
-                        const mPhone = String(info.phone || "").replace(/[^0-9]/g, "");
-                        if (mPhone.length >= 8 && mPhone.slice(-8) === tail) {
-                            return { ...info, name: k };
-                        }
-                    }
-                }
-
-                if (cleanRep.length >= 2) {
-                    const repMatches = entries.filter(([k, info]) => {
-                        const mRep = String(info.rep || "").replace(/외\s*\d+명?|\s+/g, "").trim();
-                        return mRep && (mRep === cleanRep || mRep.includes(cleanRep) || cleanRep.includes(mRep));
+                try {
+                    await dbRef.current.collection('rrb_master').doc('all_shops').set({
+                        shopsJson: JSON.stringify(nextMaster),
+                        count: Object.keys(nextMaster).length,
+                        updatedAt: Date.now()
                     });
-
-                    if (repMatches.length === 1) {
-                        return { ...repMatches[0][1], name: repMatches[0][0] };
-                    } else if (repMatches.length > 1) {
-                        for (const [k, info] of repMatches) {
-                            const cKey = stripSuffix(k);
-                            if (coreTarget.length >= 2 && cKey && (cKey.includes(coreTarget) || coreTarget.includes(cKey))) {
-                                return { ...info, name: k };
-                            }
-                            const mAddr = String(info.address || "").replace(/\s+/g, "");
-                            if (cleanAddr.length >= 4 && mAddr && (mAddr.includes(cleanAddr) || cleanAddr.includes(mAddr))) {
-                                return { ...info, name: k };
-                            }
-                        }
+                    setDbStatus('connected');
+                    return { synced: true };
+                } catch (err) {
+                    const code = err && err.code ? err.code : 'unknown';
+                    if (code === 'resource-exhausted') {
+                        setDbStatus('quota');
+                        return { synced: false, reason: '무료 쓰기 한도 초과로 로컬에만 저장됨' };
                     }
-                }
-
-                if (coreTarget.length >= 2) {
-                    for (const [k, info] of entries) {
-                        const cKey = stripSuffix(k);
-                        if (cKey && cKey === coreTarget) {
-                            return { ...info, name: k };
-                        }
+                    if (code === 'permission-denied') {
+                        setDbStatus('denied');
+                        return { synced: false, reason: '보안 규칙 차단으로 로컬에만 저장됨' };
                     }
+                    return { synced: false, reason: `클라우드 저장 실패(${code})로 로컬에만 저장됨` };
                 }
-
-                if (cleanAddr.length >= 6) {
-                    for (const [k, info] of entries) {
-                        const mAddr = String(info.address || "").replace(/\s+/g, "");
-                        if (mAddr.length >= 6 && (mAddr.includes(cleanAddr) || cleanAddr.includes(mAddr))) {
-                            return { ...info, name: k };
-                        }
-                    }
-                }
-
-                return null;
             };
 
-            // 5. 엑셀 파일 업로드 처리
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
 
-                let year = new Date().getFullYear().toString();
-                let month = (new Date().getMonth() + 1).toString().padStart(2, '0');
-                
-                const korMatch = file.name.match(/(?:20)?(\d{2})년\s*(\d{1,2})월/);
-                const hyphenMatch = file.name.match(/(20\d{2})[-._]?(\d{1,2})/);
-                const shortMatch = file.name.match(/(\d{2})[-._](\d{1,2})/);
-                const yymmddMatch = file.name.match(/_(\d{2})(\d{2})\d{2}/);
-
-                if (korMatch) { year = "20" + korMatch[1]; month = korMatch[2].padStart(2, '0'); }
-                else if (hyphenMatch) { year = hyphenMatch[1]; month = hyphenMatch[2].padStart(2, '0'); }
-                else if (shortMatch) { year = "20" + shortMatch[1]; month = shortMatch[2].padStart(2, '0'); }
-                else if (yymmddMatch) { year = "20" + yymmddMatch[1]; month = yymmddMatch[2].padStart(2, '0'); }
-
+                const yearMonth = parseYearMonthFromFileName(file.name);
                 const detectedType = file.name.includes("팥") ? "팥" : (file.name.includes("쌀") ? "쌀" : selectedItemType);
                 setSelectedItemType(detectedType);
 
@@ -471,17 +632,15 @@
                         const wb = XLSX.read(buffer, { type: 'array' });
                         const ws = wb.Sheets[wb.SheetNames[0]];
                         const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
-                        await processRowsData(data, file.name, `${year}-${month}`, detectedType, null);
+                        await processRowsData(data, file.name, yearMonth, detectedType, null);
                     } catch (err) {
-                        console.error(err);
-                        showToast("파일 처리 중 오류가 발생했습니다.", "error");
+                        showToast(`파일 처리 중 오류가 발생했습니다 (${err.message}).`, "error");
                     }
                 };
                 reader.readAsArrayBuffer(file);
-                e.target.value = null; 
+                e.target.value = null;
             };
 
-            // 6. 제미나이 텍스트(JSON / 마크다운 표 / CSV·탭) 안전 파싱
             const copyGeminiFaxPrompt = async () => {
                 const promptText = `팩스 공급내역서 사진을 읽어서 아래 JSON 형식으로만 정확히 추출해줘.
 - 설명 없이 JSON만 출력
@@ -500,7 +659,7 @@
   ]
 }`;
                 const ok = await copyTextSafe(promptText);
-                if (ok) showToast("🤖 제미나이 팩스 추출 명령어(합계 검산 포함) 복사 완료!", "success");
+                if (ok) showToast("제미나이 팩스 추출 명령어가 복사되었습니다.", "success");
             };
 
             const handleClipboardQuickPaste = async () => {
@@ -508,53 +667,13 @@
                     const txt = await navigator.clipboard.readText();
                     if (txt && txt.trim()) {
                         setPasteText(txt);
-                        showToast("📋 클립보드 내용을 불러왔습니다!", "success");
+                        showToast("클립보드 내용을 불러왔습니다.", "success");
                     } else {
                         showToast("클립보드가 비어 있습니다.", "error");
                     }
-                } catch (e) {
+                } catch (_) {
                     showToast("입력 칸을 길게 눌러 직접 붙여넣기 해주세요.", "info");
                 }
-            };
-
-            // JSON 블록 안전 추출기 (앞뒤 설명 문구 제거 + 2장 이어붙임 ][ 자동 병합)
-            const extractJsonSafely = (rawText) => {
-                let cleaned = rawText.replace(/```(?:json|csv|tsv|text)?/gi, '').replace(/```/g, '').trim();
-
-                // 2장 이상 JSON 배열을 그대로 이어붙인 경우: [...] [...] -> [..., ...]
-                if (/\]\s*\[/.test(cleaned)) {
-                    cleaned = cleaned.replace(/\]\s*\[/g, ',');
-                }
-
-                // 객체 { "items": [...] } 형태 우선 시도
-                const firstBrace = cleaned.indexOf('{');
-                const lastBrace = cleaned.lastIndexOf('}');
-                const firstBracket = cleaned.indexOf('[');
-                const lastBracket = cleaned.lastIndexOf(']');
-
-                // { 가 [ 보다 먼저 나오면 전체 객체 파싱 시도
-                if (firstBrace !== -1 && lastBrace > firstBrace && (firstBracket === -1 || firstBrace < firstBracket)) {
-                    try {
-                        const obj = JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
-                        if (obj && Array.isArray(obj.items)) {
-                            return { items: obj.items, embeddedTotal: parseSafeInt(obj.expectedTotal || obj.totalSacks || obj.합계) || null };
-                        }
-                    } catch (e) {}
-                }
-
-                // [ ... ] 배열 구간만 잘라내어 파싱 시도
-                if (firstBracket !== -1 && lastBracket > firstBracket) {
-                    try {
-                        const arr = JSON.parse(cleaned.slice(firstBracket, lastBracket + 1));
-                        if (Array.isArray(arr)) {
-                            return { items: arr, embeddedTotal: null };
-                        }
-                    } catch (e) {
-                        return { error: "JSON 형식이 깨져 있습니다. 복사 시 끝 괄호 ']'가 잘렸는지 확인해 주세요." };
-                    }
-                }
-
-                return null;
             };
 
             const handleProcessPastedText = async () => {
@@ -572,7 +691,7 @@
                 let rows2D = [];
                 let expectedTotal = parseSafeInt(pasteExpectedTotal) || null;
 
-                const jsonAttempt = extractJsonSafely(raw);
+                const jsonAttempt = extractJsonBlocks(raw);
                 if (jsonAttempt && jsonAttempt.error) {
                     showToast(jsonAttempt.error, "error");
                     return;
@@ -629,10 +748,9 @@
                 await processRowsData(rows2D, fileName, ym, selectedItemType, expectedTotal);
             };
 
-            // 7. 공통 데이터 분류 엔진 (kg 오인식 차단 + 합계 검산 + 중복 경고)
             const processRowsData = async (rows, fileName, yearMonth, itemType = '쌀', expectedTotal = null) => {
                 if (Object.keys(masterData).length === 0) {
-                    showToast("등록된 떡집 명단이 0곳입니다. [하차지 목록]에서 명단 엑셀을 먼저 올려주세요!", "error");
+                    showToast("등록된 떡집 명단이 0곳입니다. [하차지 목록]에서 명단 엑셀을 먼저 올려주세요.", "error");
                 }
 
                 let headerRowIdx = -1;
@@ -651,8 +769,6 @@
                             if (cell === null || cell === undefined) return;
                             const cleanCell = String(cell).replace(/\s+/g, "");
                             const lowerCell = cleanCell.toLowerCase();
-
-                            // '포' 표기 없이 kg만 있는 중량 열(예: 쌀수량(kg), 팥수량kg, 미국산쌀(kg))은 포대 열에서 원천 제외
                             const isPureKgCol = lowerCell.includes("kg") && !cleanCell.includes("포");
 
                             if (cleanCell.includes("번호") && !cleanCell.includes("코드") && !cleanCell.includes("전화")) colMap.no = idx;
@@ -696,10 +812,10 @@
                 for (let i = headerRowIdx + 1; i < rows.length; i++) {
                     const row = rows[i];
                     if (!row || row.length === 0) continue;
-                    
+
                     const rawName = row[colMap.name];
                     if (!rawName) continue;
-                    
+
                     const cleanName = String(rawName).trim();
                     if (cleanName === "" || cleanName.includes("합계") || cleanName.includes("총계") || cleanName.includes("소계")) continue;
 
@@ -708,39 +824,35 @@
 
                     const sacks = colMap.sack !== undefined ? parseSafeInt(row[colMap.sack]) : 0;
                     const usSacks = colMap.usSack !== undefined ? parseSafeInt(row[colMap.usSack]) : 0;
-                    
+
                     if (sacks === 0 && usSacks === 0) continue;
 
                     const rowAddr = (colMap.address !== undefined && row[colMap.address]) ? String(row[colMap.address]).trim() : "";
                     const rowPhone = (colMap.phone !== undefined && row[colMap.phone]) ? String(row[colMap.phone]).trim() : "";
 
-                    const master = findSmartMaster(cleanName, rep, rowPhone, rowAddr);
+                    const resolved = resolveRowWithMaster(
+                        { name: cleanName, rep, phone: rowPhone, address: rowAddr },
+                        masterData
+                    );
 
-                    const unifiedName = (master && master.name) ? master.name : cleanName;
-                    const address = (master && master.address) ? master.address : rowAddr;
-                    const phone = (master && master.phone) ? master.phone : rowPhone;
-                    const region = (master && master.region && master.region !== "미분류")
-                        ? master.region
-                        : inferRegionByAddress(address);
+                    if (resolved.region === "미분류") unclassifiedCount++;
 
-                    if (region === "미분류") unclassifiedCount++;
-
-                    if (!master) {
+                    if (!resolved.master) {
                         unregisteredList.push({
                             no: origNo, name: cleanName, rep, phone: rowPhone, address: rowAddr, sacks: sacks + usSacks
                         });
                     } else {
                         const normFileName = cleanName.replace(/\s+/g, "");
-                        const normMasterName = String(master.name || "").replace(/\s+/g, "");
+                        const normMasterName = String(resolved.master.name || "").replace(/\s+/g, "");
                         const normFileRep = String(rep || "").replace(/외\s*\d+명?|\s+/g, "").trim();
-                        const normMasterRep = String(master.rep || "").replace(/외\s*\d+명?|\s+/g, "").trim();
+                        const normMasterRep = String(resolved.master.rep || "").replace(/외\s*\d+명?|\s+/g, "").trim();
                         const nameDiff = normFileName !== normMasterName;
                         const repDiff = Boolean(normFileRep && normMasterRep && normFileRep !== normMasterRep);
 
                         if (nameDiff || repDiff) {
                             typoList.push({
-                                no: origNo, fileName: cleanName, masterName: master.name,
-                                fileRep: rep, masterRep: master.rep || "", nameDiff, repDiff
+                                no: origNo, fileName: cleanName, masterName: resolved.master.name,
+                                fileRep: rep, masterRep: resolved.master.rep || "", nameDiff, repDiff
                             });
                         }
                     }
@@ -750,11 +862,11 @@
 
                     parsedList.push({
                         no: origNo,
-                        name: unifiedName,
-                        rep: rep || (master && master.rep ? master.rep : ""),
-                        region,
-                        address,
-                        phone,
+                        name: resolved.name,
+                        rep: resolved.rep,
+                        region: resolved.region,
+                        address: resolved.address,
+                        phone: resolved.phone,
                         sacks,
                         usSacks,
                         completed: false,
@@ -790,59 +902,40 @@
                 };
 
                 const commitNewDoc = async () => {
-                    setCurrentDoc(newDoc);
+                    setHistory(prev => [newDoc, ...prev.filter(h => h.id !== docId)]);
+                    setCurrentDocId(docId);
                     setSelectedDeliveryDocId(docId);
 
                     const alertSuffix = (unregisteredList.length > 0 || typoList.length > 0)
                         ? ` (미등록 ${unregisteredList.length}·확인 ${typoList.length})`
                         : "";
 
-                    if (dbRef.current) {
+                    if (authUser && dbRef.current) {
                         try {
-                            await dbRef.current.collection('rrb_history').doc(docId).set({
-                                fileName: newDoc.fileName,
-                                itemType: newDoc.itemType,
-                                yearMonth: newDoc.yearMonth,
-                                uploadDate: newDoc.uploadDate,
-                                timestamp: newDoc.timestamp,
-                                totalSacks: newDoc.totalSacks,
-                                totalKrSacks: newDoc.totalKrSacks,
-                                totalUsSacks: newDoc.totalUsSacks,
-                                expectedTotal: newDoc.expectedTotal,
-                                totalMismatch: newDoc.totalMismatch,
-                                unclassifiedCount: newDoc.unclassifiedCount,
-                                unregisteredList: newDoc.unregisteredList,
-                                typoList: newDoc.typoList,
-                                recordsJson: JSON.stringify(newDoc.data)
-                            });
+                            await dbRef.current.collection('rrb_history').doc(docId).set(serializeHistoryDoc(newDoc));
                             showToast(
                                 totalMismatch
-                                    ? `⚠️ 팩스 합계(${expectedTotal}포)와 추출 합계(${totalSacks}포)가 다릅니다!`
-                                    : `분류 및 클라우드 저장 완료! (총 ${totalSacks}포)${alertSuffix}`,
+                                    ? `팩스 합계(${expectedTotal}포)와 추출 합계(${totalSacks}포)가 다릅니다.`
+                                    : `분류 및 클라우드 저장 완료 (총 ${totalSacks}포)${alertSuffix}`,
                                 (totalMismatch || unregisteredList.length > 0 || typoList.length > 0) ? "error" : "success"
                             );
-                        } catch (e) {
-                            console.error("Save history error:", e);
-                            setHistory(prev => [newDoc, ...prev]);
-                            showToast(`분류 완료 (로컬 임시저장 · 총 ${totalSacks}포)${alertSuffix}`, "info");
+                        } catch (err) {
+                            showToast(`분류 완료 (클라우드 저장 실패: ${err.code || '오류'} · 로컬 임시저장 · 총 ${totalSacks}포)${alertSuffix}`, "error");
                         }
                     } else {
-                        setHistory(prev => [newDoc, ...prev]);
                         showToast(
                             totalMismatch
-                                ? `⚠️ 팩스 합계(${expectedTotal}포)와 추출 합계(${totalSacks}포)가 다릅니다!`
-                                : `분류 완료! (총 ${totalSacks}포)${alertSuffix}`,
-                            (totalMismatch || unregisteredList.length > 0 || typoList.length > 0) ? "error" : "success"
+                                ? `팩스 합계(${expectedTotal}포)와 추출 합계(${totalSacks}포)가 다릅니다.`
+                                : `분류 완료 (로컬 저장 · 총 ${totalSacks}포)${alertSuffix}`,
+                            (totalMismatch || unregisteredList.length > 0 || typoList.length > 0) ? "error" : "info"
                         );
                     }
 
-                    // 합계 불일치 시에는 실수 방지용으로 자동다운 보류
                     if (autoDownloadExcel && !totalMismatch) {
                         setTimeout(() => exportToExcel(newDoc, itemType), 250);
                     }
                 };
 
-                // 중복 업로드 감지 (동일 품목 + 귀속월 + 총포대 + 업체수)
                 const isDuplicate = history.some(h =>
                     h.yearMonth === yearMonth &&
                     (h.itemType || '쌀') === itemType &&
@@ -852,7 +945,7 @@
 
                 if (totalMismatch) {
                     setConfirmDialog({
-                        title: '⚠️ 팩스 총합계 불일치 감지!',
+                        title: '팩스 총합계 불일치 감지',
                         message: `팩스 기준 합계는 ${expectedTotal}포인데, 추출된 합계는 ${totalSacks}포입니다 (차이: ${totalSacks - expectedTotal > 0 ? '+' : ''}${totalSacks - expectedTotal}포). 그래도 이대로 저장할까요?`,
                         confirmText: '그대로 저장',
                         danger: true,
@@ -871,28 +964,18 @@
                 }
             };
 
-            // 로컬 임시 문서도 온라인 복귀 시 에러 없이 병합 저장 (.set(..., { merge: true }))
             const persistDocUpdate = async (updatedDoc) => {
-                if (currentDoc && currentDoc.id === updatedDoc.id) setCurrentDoc(updatedDoc);
                 setHistory(prev => prev.map(h => h.id === updatedDoc.id ? updatedDoc : h));
 
-                if (dbRef.current) {
-                    try {
-                        await dbRef.current.collection('rrb_history').doc(updatedDoc.id).set({
-                            fileName: updatedDoc.fileName,
-                            itemType: updatedDoc.itemType || selectedItemType,
-                            yearMonth: updatedDoc.yearMonth,
-                            uploadDate: updatedDoc.uploadDate,
-                            timestamp: updatedDoc.timestamp,
-                            totalSacks: updatedDoc.totalSacks,
-                            totalKrSacks: updatedDoc.totalKrSacks ?? updatedDoc.totalSacks,
-                            totalUsSacks: updatedDoc.totalUsSacks ?? 0,
-                            unclassifiedCount: updatedDoc.unclassifiedCount || 0,
-                            recordsJson: JSON.stringify(updatedDoc.data)
-                        }, { merge: true });
-                    } catch (e) {
-                        console.error("Update doc error:", e);
-                    }
+                if (!authUser || !dbRef.current) return;
+
+                try {
+                    await dbRef.current.collection('rrb_history').doc(updatedDoc.id).set(
+                        serializeHistoryDoc(updatedDoc),
+                        { merge: true }
+                    );
+                } catch (err) {
+                    showToast(`체크 상태 클라우드 반영 실패 (${err.code || '오류'}). 로컬에만 저장되었습니다.`, "error");
                 }
             };
 
@@ -940,11 +1023,11 @@
                     idxSet.has(idx) ? { ...item, completed: status, mySacks: null } : item
                 );
                 await persistDocUpdate({ ...docObj, data: updatedData });
-                showToast(status ? `${targetIndices.length}곳 일괄 체크 완료!` : `${targetIndices.length}곳 체크 해지 완료!`, "success");
+                showToast(status ? `${targetIndices.length}곳 일괄 체크 완료` : `${targetIndices.length}곳 체크 해지 완료`, "success");
             };
 
             const deleteHistoryDoc = async (docId) => {
-                if (currentDoc && currentDoc.id === docId) setCurrentDoc(null);
+                if (currentDocId === docId) setCurrentDocId(null);
                 setHistory(prev => {
                     const next = prev.filter(h => h.id !== docId);
                     if (selectedDeliveryDocId === docId) {
@@ -953,32 +1036,26 @@
                     return next;
                 });
 
-                if (dbRef.current) {
+                if (authUser && dbRef.current) {
                     try {
                         await dbRef.current.collection('rrb_history').doc(docId).delete();
                         showToast("클라우드 내역이 삭제되었습니다.", "success");
                     } catch (err) {
-                        showToast("로컬 내역에서 삭제되었습니다.", "info");
+                        showToast(`클라우드 삭제 실패 (${err.code || '오류'}). 로컬에서만 삭제되었습니다.`, "error");
                     }
                 } else {
-                    showToast("내역이 삭제되었습니다.", "success");
+                    showToast("로컬 내역이 삭제되었습니다.", "info");
                 }
             };
 
-            // 8. 권역별 카톡 텍스트 원터치 복사 (미분류 존재 시 누락 경고 포함)
             const copyRegionKakaoText = async (docObj, regionsList, titleLabel) => {
                 if (!docObj || !docObj.data) return;
                 const itemLabel = docObj.itemType || (docObj.fileName && docObj.fileName.includes("팥") ? "팥" : selectedItemType);
 
                 const resolved = docObj.data.map(item => {
-                    const m = findSmartMaster(item.name, item.rep, item.phone, item.address) || {};
-                    const addr = m.address || item.address || "";
-                    const reg = (m.region && m.region !== "미분류") ? m.region : (item.region && item.region !== "미분류" ? item.region : inferRegionByAddress(addr));
+                    const r = resolveRowWithMaster(item, masterData);
                     return {
-                        name: m.name || item.name,
-                        address: addr,
-                        phone: m.phone || item.phone || "",
-                        region: reg,
+                        ...r,
                         sacks: Number(item.sacks) || 0,
                         usSacks: Number(item.usSacks) || 0
                     };
@@ -1012,14 +1089,13 @@
                 const ok = await copyTextSafe(lines.join('\n'));
                 if (ok) {
                     if (unclassifiedItems.length > 0 && !regionsList.includes('미분류')) {
-                        showToast(`📲 [${titleLabel}] 복사 완료 (${grandTotal}포) · ⚠️ 미분류 ${unclassifiedItems.length}곳 별도 확인 필요!`, "error");
+                        showToast(`[${titleLabel}] 복사 완료 (${grandTotal}포) · 미분류 ${unclassifiedItems.length}곳 별도 확인 필요`, "error");
                     } else {
-                        showToast(`📲 [${titleLabel}] 카톡 명단 복사 완료! (${grandTotal}포)`, "success");
+                        showToast(`[${titleLabel}] 카톡 명단 복사 완료 (${grandTotal}포)`, "success");
                     }
                 }
             };
 
-            // 9. 스타일 적용 엑셀 다운로드 (팥 25kg(포) 단일 열 + 모든 합계 SUM 수식 적용)
             const exportToExcel = (docToExport, overrideItemType = null) => {
                 if (!docToExport || !docToExport.data) return;
 
@@ -1030,21 +1106,14 @@
                     const usSacks = Number(item.usSacks) || 0;
 
                     if (sacks > 0 || usSacks > 0) {
-                        const cleanName = String(item.name).trim();
-                        const master = findSmartMaster(cleanName, item.rep, item.phone, item.address) || {};
-                        const resolvedName = master.name || cleanName;
-                        const resolvedAddress = master.address || item.address || "";
-                        const resolvedRegion = (master.region && master.region !== "미분류")
-                            ? master.region
-                            : ((item.region && item.region !== "미분류") ? item.region : inferRegionByAddress(resolvedAddress));
-
+                        const resolved = resolveRowWithMaster(item, masterData);
                         recoveredData.push({
                             no: origNo,
-                            name: resolvedName,
-                            rep: item.rep || master.rep || "",
-                            region: resolvedRegion,
-                            address: resolvedAddress,
-                            phone: master.phone || item.phone || "",
+                            name: resolved.name,
+                            rep: resolved.rep,
+                            region: resolved.region,
+                            address: resolved.address,
+                            phone: resolved.phone,
                             sacks,
                             usSacks: usSacks > 0 ? usSacks : ""
                         });
@@ -1085,13 +1154,11 @@
                         const items = recoveredData.filter(d => d.region === regionName);
                         if (items.length === 0) return;
 
-                        // 권역 배너
                         sData.push(isBean ? [regionName, "", "", "", ""] : [regionName, "", "", "", "", ""]);
                         sMerges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: colCount - 1 } });
                         sRowTypes.push({ type: 'banner' });
                         currentRow++;
 
-                        // 헤더
                         sData.push(isBean
                             ? ["상호", "대표자", "주소", "전화번호", "25kg(포)"]
                             : ["상호", "대표자", "주소", "전화번호", "국산(포)", "미국산(포)"]
@@ -1099,7 +1166,7 @@
                         sRowTypes.push({ type: 'header' });
                         currentRow++;
 
-                        const dataStartExcelRow = currentRow + 1; // 1-based Excel row
+                        const dataStartExcelRow = currentRow + 1;
                         let sumKr = 0, sumUs = 0;
                         items.forEach(item => {
                             const krVal = Number(item.sacks) || 0;
@@ -1114,9 +1181,8 @@
                             sRowTypes.push({ type: 'data' });
                             currentRow++;
                         });
-                        const dataEndExcelRow = currentRow; // 1-based Excel row
+                        const dataEndExcelRow = currentRow;
 
-                        // 권역 합계 행 (수식 정보 기록)
                         sData.push(isBean
                             ? ["", "", "", "합계", sumKr + sumUs]
                             : ["", "", "", "합계", sumKr, sumUs]
@@ -1131,7 +1197,6 @@
                         sRowTypes.push({ type: 'sum' });
                         currentRow++;
 
-                        // 빈 줄
                         sData.push(isBean ? ["", "", "", "", ""] : ["", "", "", "", "", ""]);
                         sRowTypes.push({ type: 'blank' });
                         currentRow++;
@@ -1152,7 +1217,6 @@
                         ? [{ wch: 24 }, { wch: 12 }, { wch: 42 }, { wch: 16 }, { wch: 12 }]
                         : [{ wch: 24 }, { wch: 12 }, { wch: 42 }, { wch: 16 }, { wch: 11 }, { wch: 11 }];
 
-                    // SUM 수식 주입
                     sumMetaList.forEach(meta => {
                         const cellE = XLSX.utils.encode_cell({ r: meta.rowIdx, c: 4 });
                         ws[cellE] = { t: 'n', f: `SUM(E${meta.startRow}:E${meta.endRow})`, v: meta.sumKr };
@@ -1206,7 +1270,6 @@
                 XLSX.utils.book_append_sheet(wb, buildRegionSheet(['제주시', '신제주']), "제주시·신제주");
                 XLSX.utils.book_append_sheet(wb, buildRegionSheet(['서쪽', '동쪽', '서귀포', '미분류']), "서쪽·동쪽·서귀포");
 
-                // 시트 3: 업체별 공급내역 (A열 지역, B열 번호, C열 상호 순 + SUM 수식)
                 const s3Data = [
                     isBean
                         ? ["지역", "번호", "상호", "대표자", "주소", "전화번호", "25kg(포)"]
@@ -1239,17 +1302,15 @@
                 const range3 = XLSX.utils.decode_range(ws3['!ref']);
                 const lastRow3 = range3.e.r;
 
-                // 시트 3 총합계 SUM 수식 주입
-                const dataEndRow3 = lastRow3; // 1-based Excel row for last data row
                 ws3[XLSX.utils.encode_cell({ r: lastRow3, c: 6 })] = {
                     t: 'n',
-                    f: `SUM(G2:G${dataEndRow3})`,
+                    f: `SUM(G2:G${lastRow3})`,
                     v: isBean ? (totalKrAll + totalUsAll) : totalKrAll
                 };
                 if (!isBean) {
                     ws3[XLSX.utils.encode_cell({ r: lastRow3, c: 7 })] = {
                         t: 'n',
-                        f: `SUM(H2:H${dataEndRow3})`,
+                        f: `SUM(H2:H${lastRow3})`,
                         v: totalUsAll
                     };
                 }
@@ -1290,15 +1351,14 @@
                 const outputFileName = `${itemLabel})떡집 ${itemLabel}배달_${yymmdd}.xlsx`;
 
                 XLSX.writeFile(wb, outputFileName);
-                showToast(`'${outputFileName}' 다운로드 완료! (SUM 수식 적용)`, "success");
+                showToast(`'${outputFileName}' 다운로드 완료 (SUM 수식 적용)`, "success");
             };
 
-            // 10. 하차지(떡집 명단) 등록·수정·삭제·엑셀 동기화 (덮어쓰기 확인 + 중복 상호 감지)
             const addRegion = async (e) => {
                 e.preventDefault();
                 const name = newCompName.trim();
                 if (!name) return;
-                
+
                 const newEntry = {
                     name,
                     rep: newCompRep.trim(),
@@ -1308,16 +1368,24 @@
                 };
 
                 const nextMaster = { ...masterData, [name]: newEntry };
-                await saveMasterToCloud(nextMaster);
+                const res = await saveMasterToCloud(nextMaster);
                 setNewCompName(''); setNewCompRep(''); setNewCompAddress(''); setNewCompPhone('');
-                showToast(`'${name}' 하차지가 저장되었습니다.`, "success");
+                if (res.synced) {
+                    showToast(`'${name}' 하차지가 클라우드에 저장되었습니다.`, "success");
+                } else {
+                    showToast(`'${name}' 저장됨 (${res.reason})`, "error");
+                }
             };
 
             const deleteRegionItem = async (name) => {
                 const nextMaster = { ...masterData };
                 delete nextMaster[name];
-                await saveMasterToCloud(nextMaster);
-                showToast(`'${name}' 하차지가 삭제되었습니다.`, "success");
+                const res = await saveMasterToCloud(nextMaster);
+                if (res.synced) {
+                    showToast(`'${name}' 하차지가 삭제되었습니다.`, "success");
+                } else {
+                    showToast(`'${name}' 삭제됨 (${res.reason})`, "error");
+                }
             };
 
             const handleMasterExcelUpload = async (e) => {
@@ -1394,15 +1462,19 @@
                         }
 
                         const applyUpload = async () => {
-                            await saveMasterToCloud(newMaster);
+                            const res = await saveMasterToCloud(newMaster);
                             const dupMsg = duplicateNames.length > 0 ? ` (중복 상호 ${duplicateNames.length}건: ${duplicateNames.slice(0, 3).join(', ')})` : '';
-                            showToast(`'${targetSheetName}' 기준 ${successCount}곳 명단 동기화 완료!${dupMsg}`, duplicateNames.length > 0 ? "error" : "success");
+                            if (res.synced) {
+                                showToast(`'${targetSheetName}' 기준 ${successCount}곳 명단 동기화 완료${dupMsg}`, duplicateNames.length > 0 ? "error" : "success");
+                            } else {
+                                showToast(`${successCount}곳 로컬 반영 (${res.reason})${dupMsg}`, "error");
+                            }
                         };
 
                         const prevCount = Object.keys(masterData).length;
                         if (prevCount > 0) {
                             const dupNotice = duplicateNames.length > 0
-                                ? `\n⚠️ 엑셀 내 중복 상호 ${duplicateNames.length}건 감지: ${duplicateNames.slice(0, 4).join(', ')}`
+                                ? `\n엑셀 내 중복 상호 ${duplicateNames.length}건 감지: ${duplicateNames.slice(0, 4).join(', ')}`
                                 : '';
                             setConfirmDialog({
                                 title: '떡집 명단 전체 교체 확인',
@@ -1415,19 +1487,45 @@
                             await applyUpload();
                         }
                     } catch (err) {
-                        console.error("Master upload error:", err);
-                        showToast("엑셀 명단 처리 중 오류가 발생했습니다.", "error");
+                        showToast(`엑셀 명단 처리 중 오류가 발생했습니다 (${err.message}).`, "error");
                     }
                 };
                 reader.readAsArrayBuffer(file);
                 e.target.value = null;
             };
 
+            const currentDocSummary = useMemo(() => {
+                if (!currentDoc) return null;
+                const regionSums = { '제주시': 0, '신제주': 0, '서쪽': 0, '동쪽': 0, '서귀포': 0, '미분류': 0 };
+                const liveUnregistered = [];
+
+                (currentDoc.data || []).forEach(row => {
+                    const resolved = resolveRowWithMaster(row, masterData);
+                    const total = (Number(row.sacks) || 0) + (Number(row.usSacks) || 0);
+                    regionSums[resolved.region] = (regionSums[resolved.region] || 0) + total;
+                    if (!resolved.master) {
+                        liveUnregistered.push({
+                            no: row.no,
+                            name: row.name,
+                            rep: row.rep,
+                            phone: row.phone,
+                            address: row.address,
+                            sacks: total
+                        });
+                    }
+                });
+
+                return {
+                    regionSums,
+                    unclassifiedSum: regionSums['미분류'] || 0,
+                    liveUnregistered
+                };
+            }, [currentDoc, masterData]);
+
             const filteredStats = useMemo(() => {
                 let totalSacks = 0, completedSacks = 0, completedCount = 0, totalCount = 0;
                 const byRegion = { '제주시': 0, '신제주': 0, '서쪽': 0, '동쪽': 0, '서귀포': 0, '미분류': 0 };
                 const completedByRegion = { '제주시': 0, '신제주': 0, '서쪽': 0, '동쪽': 0, '서귀포': 0, '미분류': 0 };
-                const byCompany = {};
                 const completedByCompany = {};
 
                 const targetDocs = history.filter(doc => {
@@ -1441,22 +1539,18 @@
                 targetDocs.forEach(doc => {
                     (doc.data || []).forEach(row => {
                         const s = (Number(row.sacks) || 0) + (Number(row.usSacks) || 0);
-                        const m = findSmartMaster(row.name, row.rep, row.phone, row.address) || {};
-                        const canonicalName = m.name || row.name;
-                        const resolvedAddr = m.address || row.address || "";
-                        const r = (m.region && m.region !== "미분류") ? m.region : (row.region && row.region !== "미분류" ? row.region : inferRegionByAddress(resolvedAddr));
-                        
+                        const resolved = resolveRowWithMaster(row, masterData);
+
                         totalSacks += s;
                         totalCount += 1;
-                        byRegion[r] = (byRegion[r] || 0) + s;
-                        byCompany[canonicalName] = (byCompany[canonicalName] || 0) + s;
+                        byRegion[resolved.region] = (byRegion[resolved.region] || 0) + s;
 
                         const myS = getEffectiveMySacks(row);
                         if (row.completed && myS > 0) {
                             completedSacks += myS;
                             completedCount += 1;
-                            completedByRegion[r] = (completedByRegion[r] || 0) + myS;
-                            completedByCompany[canonicalName] = (completedByCompany[canonicalName] || 0) + myS;
+                            completedByRegion[resolved.region] = (completedByRegion[resolved.region] || 0) + myS;
+                            completedByCompany[resolved.name] = (completedByCompany[resolved.name] || 0) + myS;
                         }
                     });
                 });
@@ -1481,12 +1575,106 @@
                     .sort((a, b) => a[0].localeCompare(b[0], 'ko-KR'));
             }, [masterData, regionSearch]);
 
+            const statusBadgeLabel =
+                dbStatus === 'connected' ? '클라우드 연결됨' :
+                dbStatus === 'auth_required' ? '로그인 필요' :
+                dbStatus === 'denied' ? '규칙차단(터치)' :
+                dbStatus === 'quota' ? '한도초과(로컬)' :
+                dbStatus === 'connecting' ? '연결 중...' : '로컬 모드(터치)';
+
             return (
                 <div className="max-w-md mx-auto min-h-screen bg-[#f5f2eb] shadow-2xl flex flex-col relative safe-pb border-x border-[#e6dfd5]">
                     {toast && (
                         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-11/12 max-w-sm bg-stone-800 text-[#fdfbf7] px-4 py-3 rounded-2xl shadow-xl flex items-center text-xs font-bold">
                             <Icon name={toast.type === 'error' ? 'alert-triangle' : 'check-circle'} className={toast.type === 'error' ? 'text-rose-300 mr-2' : 'text-emerald-300 mr-2'} />
                             <span className="leading-snug">{toast.msg}</span>
+                        </div>
+                    )}
+
+                    {showAuthModal && (
+                        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                            <div className="bg-[#fffdfa] border border-[#e6dfd5] rounded-[28px] p-5 w-full max-w-sm shadow-2xl space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-sm font-extrabold text-stone-800 flex items-center">
+                                        <Icon name="lock" size={16} className="mr-1.5 text-amber-700" />
+                                        {authUser ? '클라우드 계정 정보' : '클라우드 로그인'}
+                                    </h3>
+                                    <button onClick={() => setShowAuthModal(false)} className="text-stone-400 hover:text-stone-700 p-1">
+                                        <Icon name="x" size={18} />
+                                    </button>
+                                </div>
+
+                                {authUser ? (
+                                    <div className="space-y-3 text-xs">
+                                        <div className="bg-[#f7f4ef] border border-[#e6dfd5] rounded-2xl p-3 space-y-1.5">
+                                            <div>
+                                                <span className="text-[10px] font-bold text-stone-400 block">로그인 이메일</span>
+                                                <span className="font-extrabold text-stone-800">{authUser.email}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] font-bold text-stone-400 block">내 UID (Firestore 규칙에 입력)</span>
+                                                <div className="flex items-center justify-between gap-2 mt-0.5">
+                                                    <code className="text-[11px] font-mono text-stone-700 break-all">{authUser.uid}</code>
+                                                    <button
+                                                        type="button"
+                                                        onClick={async () => {
+                                                            const ok = await copyTextSafe(authUser.uid);
+                                                            if (ok) showToast("UID가 복사되었습니다.", "success");
+                                                        }}
+                                                        className="shrink-0 bg-stone-800 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold"
+                                                    >복사</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {dbErrorMsg && (
+                                            <div className="p-2.5 rounded-xl bg-[#fdf3f2] border border-[#f5d5d2] text-[#9e3b33] text-[11px] font-bold">
+                                                {dbErrorMsg}
+                                            </div>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={handleLogout}
+                                            className="w-full py-2.5 rounded-xl bg-rose-700 text-white text-xs font-extrabold active:scale-95 transition"
+                                        >로그아웃</button>
+                                    </div>
+                                ) : (
+                                    <form onSubmit={handleEmailLogin} className="space-y-3">
+                                        <p className="text-[11px] text-stone-500 leading-relaxed">
+                                            Firebase 콘솔에 등록한 본인 이메일과 비밀번호로 한 번만 로그인하면 이 기기에서 계속 유지됩니다.
+                                        </p>
+                                        <input
+                                            type="email"
+                                            required
+                                            autoComplete="email"
+                                            placeholder="이메일"
+                                            value={loginEmail}
+                                            onChange={(e) => setLoginEmail(e.target.value)}
+                                            className="w-full bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2.5 text-xs font-medium outline-none focus:bg-white focus:border-amber-700"
+                                        />
+                                        <input
+                                            type="password"
+                                            required
+                                            autoComplete="current-password"
+                                            placeholder="비밀번호"
+                                            value={loginPassword}
+                                            onChange={(e) => setLoginPassword(e.target.value)}
+                                            className="w-full bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2.5 text-xs font-medium outline-none focus:bg-white focus:border-amber-700"
+                                        />
+                                        <button
+                                            type="submit"
+                                            disabled={authSubmitting}
+                                            className="w-full bg-stone-800 hover:bg-stone-900 disabled:opacity-50 text-white py-3 rounded-2xl text-xs font-extrabold shadow-md active:scale-95 transition"
+                                        >
+                                            {authSubmitting ? '로그인 중...' : '로그인'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowAuthModal(false)}
+                                            className="w-full py-2 rounded-xl bg-[#f4eee4] text-stone-600 text-[11px] font-bold"
+                                        >로그인 없이 로컬 모드로 보기</button>
+                                    </form>
+                                )}
+                            </div>
                         </div>
                     )}
 
@@ -1550,24 +1738,24 @@
 
                                 <div className="flex gap-1.5">
                                     <button onClick={handleClipboardQuickPaste} className="flex-1 bg-amber-100 text-amber-900 py-2 rounded-xl text-xs font-extrabold active:scale-95 transition">
-                                        📋 클립보드 붙여넣기
+                                        클립보드 붙여넣기
                                     </button>
                                     <button onClick={copyGeminiFaxPrompt} className="flex-1 bg-[#f4eee4] text-stone-700 py-2 rounded-xl text-xs font-bold active:scale-95 transition">
-                                        🤖 추출 명령어 복사
+                                        추출 명령어 복사
                                     </button>
                                 </div>
                                 <textarea
                                     rows="6"
                                     value={pasteText}
                                     onChange={(e) => setPasteText(e.target.value)}
-                                    placeholder='제미나이 답변을 그대로 붙여넣으세요. 앞뒤 인사말이 섞여 있거나 2장 JSON을 이어 붙여도 자동 인식합니다.'
+                                    placeholder='제미나이 답변을 그대로 붙여넣으세요. 앞뒤 인사말이 섞여 있거나 2장 JSON을 이어 붙여도 자동 병합합니다.'
                                     className="w-full bg-[#f7f4ef] border border-[#d6cec2] rounded-2xl p-3 text-xs font-mono outline-none focus:bg-white focus:border-amber-700"
                                 />
                                 <button
                                     onClick={handleProcessPastedText}
                                     className="w-full bg-stone-800 hover:bg-stone-900 text-white py-3 rounded-2xl text-xs font-extrabold shadow-md active:scale-95 transition"
                                 >
-                                    ⚡ 지금 바로 분류{autoDownloadExcel ? ' & 엑셀 다운' : '하기'}
+                                    지금 바로 분류{autoDownloadExcel ? ' & 엑셀 다운' : '하기'}
                                 </button>
                             </div>
                         </div>
@@ -1584,23 +1772,17 @@
                         </div>
                         <button
                             type="button"
-                            onClick={() => {
-                                if (dbStatus === 'connected') showToast('✅ 파이어베이스 클라우드와 정상 동기화 중입니다!', 'success');
-                                else showToast(dbErrorMsg || '클라우드 연결 대기 중입니다.', 'error');
-                            }}
+                            onClick={() => setShowAuthModal(true)}
                             className={`px-3 py-1.5 rounded-full text-[11px] font-bold flex items-center shadow-sm active:scale-95 transition ${
                                 dbStatus === 'connected' ? 'bg-[#e3ece6] text-[#2c5e43]' :
-                                (dbStatus === 'quota' || dbStatus === 'denied') ? 'bg-[#fdf3f2] text-[#9e3b33]' : 'bg-[#f4ebd9] text-[#8a6d3b]'
+                                (dbStatus === 'quota' || dbStatus === 'denied' || dbStatus === 'auth_required') ? 'bg-[#fdf3f2] text-[#9e3b33]' : 'bg-[#f4ebd9] text-[#8a6d3b]'
                             }`}
                         >
                             <span className={`w-2 h-2 rounded-full mr-1.5 ${
                                 dbStatus === 'connected' ? 'bg-[#3b7a57] animate-pulse' :
-                                (dbStatus === 'quota' || dbStatus === 'denied') ? 'bg-rose-600' : 'bg-[#b88b4a]'
+                                (dbStatus === 'quota' || dbStatus === 'denied' || dbStatus === 'auth_required') ? 'bg-rose-600' : 'bg-[#b88b4a]'
                             }`}></span>
-                            {dbStatus === 'connected' ? '클라우드 연결됨' :
-                             dbStatus === 'denied' ? '규칙차단(터치)' :
-                             dbStatus === 'quota' ? '한도초과(로컬)' :
-                             dbStatus === 'connecting' ? '연결 중...' : '로컬 모드(터치)'}
+                            {statusBadgeLabel}
                         </button>
                     </header>
 
@@ -1626,7 +1808,7 @@
                                                 onChange={(e) => setAutoDownloadExcel(e.target.checked)}
                                                 className="w-4 h-4 accent-[#3b6e52] rounded"
                                             />
-                                            <span className="text-[11px] font-extrabold text-[#2c5e43]">⚡ 분류 즉시 자동다운</span>
+                                            <span className="text-[11px] font-extrabold text-[#2c5e43]">분류 즉시 자동다운</span>
                                         </label>
                                     </div>
 
@@ -1634,7 +1816,7 @@
                                         <div className="w-14 h-14 bg-[#f4eee4] text-stone-700 rounded-full flex items-center justify-center mx-auto mb-2.5 shadow-inner">
                                             <Icon name="upload-cloud" size={26} />
                                         </div>
-                                        <h2 className="text-base font-extrabold text-stone-800 mb-1">공급내역서 업로드 · 딸깍 분류</h2>
+                                        <h2 className="text-base font-extrabold text-stone-800 mb-1">공급내역서 업로드 · 권역 분류</h2>
                                         <p className="text-[11px] text-stone-500 mb-4 leading-relaxed">
                                             엑셀 파일을 올리거나, 제미나이 추출 텍스트를 바로 붙여넣으면<br/>합계 검산 후 권역별로 자동 분류합니다.
                                         </p>
@@ -1651,192 +1833,177 @@
                                                 제미나이 텍스트 바로 붙여넣기 (중간엑셀 생략)
                                             </button>
                                             <label className="block w-full bg-stone-800 hover:bg-stone-900 text-[#fdfbf7] font-bold py-3.5 px-5 rounded-2xl cursor-pointer transition active:scale-95 shadow-sm text-xs">
-                                                📂 엑셀 파일 선택하기 (.xlsx / .csv)
+                                                엑셀 파일 선택하기 (.xlsx / .csv)
                                                 <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="hidden" />
                                             </label>
                                         </div>
                                     </div>
                                 </div>
 
-                                {currentDoc && (() => {
-                                    const currentUnclassifiedSum = (currentDoc.data || []).filter(d => {
-                                        const m = findSmartMaster(d.name, d.rep, d.phone, d.address) || {};
-                                        const resolvedAddr = m.address || d.address || "";
-                                        const reg = (m.region && m.region !== "미분류") ? m.region : (d.region && d.region !== "미분류" ? d.region : inferRegionByAddress(resolvedAddr));
-                                        return reg === '미분류';
-                                    }).reduce((acc, cur) => acc + (Number(cur.sacks) || 0) + (Number(cur.usSacks) || 0), 0);
-
-                                    return (
-                                        <div className="bg-[#fffdfa] rounded-[28px] p-5 shadow-sm border border-[#e6dfd5]">
-                                            <div className="flex justify-between items-center mb-3.5">
-                                                <div className="min-w-0 pr-2">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="text-[10px] font-bold bg-[#f4eee4] text-stone-700 px-2 py-0.5 rounded-md">{currentDoc.yearMonth}</span>
-                                                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md ${(currentDoc.itemType || selectedItemType) === '팥' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>
-                                                            {currentDoc.itemType || selectedItemType}
-                                                        </span>
-                                                        {currentDoc.expectedTotal && !currentDoc.totalMismatch && (
-                                                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">검산 일치</span>
-                                                        )}
-                                                    </div>
-                                                    <h3 className="font-extrabold text-sm text-stone-800 mt-1 truncate">{currentDoc.fileName}</h3>
-                                                </div>
-                                                <div className="text-right shrink-0">
-                                                    <p className="text-[10px] text-stone-400 font-medium">총 배정 (국산+미국산)</p>
-                                                    <p className="text-2xl font-black text-stone-800 leading-tight">{currentDoc.totalSacks}<span className="text-xs font-normal ml-0.5">포</span></p>
-                                                    {currentDoc.totalUsSacks > 0 && (
-                                                        <p className="text-[10px] text-rose-700 font-bold">국산 {currentDoc.totalKrSacks} · 미국산 {currentDoc.totalUsSacks}</p>
+                                {currentDoc && currentDocSummary && (
+                                    <div className="bg-[#fffdfa] rounded-[28px] p-5 shadow-sm border border-[#e6dfd5]">
+                                        <div className="flex justify-between items-center mb-3.5">
+                                            <div className="min-w-0 pr-2">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-[10px] font-bold bg-[#f4eee4] text-stone-700 px-2 py-0.5 rounded-md">{currentDoc.yearMonth}</span>
+                                                    <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md ${(currentDoc.itemType || selectedItemType) === '팥' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>
+                                                        {currentDoc.itemType || selectedItemType}
+                                                    </span>
+                                                    {currentDoc.expectedTotal && !currentDoc.totalMismatch && (
+                                                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">검산 일치</span>
                                                     )}
                                                 </div>
+                                                <h3 className="font-extrabold text-sm text-stone-800 mt-1 truncate">{currentDoc.fileName}</h3>
                                             </div>
-
-                                            {currentDoc.totalMismatch && (
-                                                <div className="mb-3 p-3 bg-rose-50 border border-rose-300 rounded-2xl text-rose-800 text-xs font-extrabold flex items-center">
-                                                    <Icon name="alert-triangle" size={16} className="mr-2 shrink-0 text-rose-600" />
-                                                    <span>팩스 기준({currentDoc.expectedTotal}포)과 추출 합계({currentDoc.totalSacks}포)가 다릅니다! 원본을 확인해 주세요.</span>
-                                                </div>
-                                            )}
-
-                                            {currentUnclassifiedSum > 0 && (
-                                                <div className="mb-3 p-3 bg-[#fdf3f2] border border-[#f5d5d2] rounded-2xl flex items-center justify-between">
-                                                    <div className="flex items-center text-[#9e3b33] text-xs font-bold">
-                                                        <Icon name="alert-circle" size={15} className="mr-1.5" />
-                                                        <span>미분류 물량 {currentUnclassifiedSum}포 발견!</span>
-                                                    </div>
-                                                    <button onClick={() => setActiveTab('regions')} className="text-[11px] bg-[#fffdfa] text-[#9e3b33] px-2.5 py-1 rounded-lg border border-[#f0c2be] font-bold">하차지 목록</button>
-                                                </div>
-                                            )}
-
-                                            {currentDoc.unregisteredList && currentDoc.unregisteredList.length > 0 && (
-                                                <div className="mb-3 p-3 bg-[#fdf3f2] border border-[#f5d5d2] rounded-2xl space-y-2">
-                                                    <div className="flex items-center justify-between text-[#9e3b33] text-xs font-extrabold">
-                                                        <span className="flex items-center"><Icon name="user-x" size={14} className="mr-1.5" />명단 미등록 ({currentDoc.unregisteredList.length}곳)</span>
-                                                        <span className="text-[10px] opacity-80">터치 시 바로 등록</span>
-                                                    </div>
-                                                    <div className="max-h-32 overflow-y-auto space-y-1.5 pr-0.5">
-                                                        {currentDoc.unregisteredList.map((u, idx) => (
-                                                            <div key={idx} className="bg-white/90 px-2.5 py-1.5 rounded-xl border border-[#f5d5d2] flex items-center justify-between text-[11px]">
-                                                                <div className="min-w-0 pr-2">
-                                                                    <span className="font-extrabold text-stone-800">{u.name}</span>
-                                                                    {u.rep && <span className="text-stone-500 ml-1">({u.rep})</span>}
-                                                                    <span className="text-rose-700 font-bold ml-1.5">{u.sacks}포</span>
-                                                                </div>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setNewCompName(u.name || ''); setNewCompRep(u.rep || '');
-                                                                        setNewCompAddress(u.address || ''); setNewCompPhone(u.phone || '');
-                                                                        const g = inferRegionByAddress(u.address);
-                                                                        setNewCompRegion(g === '미분류' ? '제주시' : g);
-                                                                        setActiveTab('regions');
-                                                                    }}
-                                                                    className="shrink-0 bg-[#9e3b33] text-white px-2.5 py-1 rounded-lg font-bold text-[10px]"
-                                                                >등록</button>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {currentDoc.typoList && currentDoc.typoList.length > 0 && (
-                                                <div className="mb-3 p-3 bg-[#fef9ec] border border-[#f2deb0] rounded-2xl space-y-1.5">
-                                                    <div className="flex items-center justify-between text-[#8a6016] text-xs font-extrabold">
-                                                        <span className="flex items-center"><Icon name="alert-triangle" size={14} className="mr-1.5" />오타·표기 자동보정 ({currentDoc.typoList.length}건)</span>
-                                                    </div>
-                                                    <div className="max-h-28 overflow-y-auto space-y-1 pr-0.5">
-                                                        {currentDoc.typoList.map((t, idx) => (
-                                                            <div key={idx} className="bg-white/90 px-2.5 py-1.5 rounded-xl border border-[#f2deb0] text-[11px]">
-                                                                {t.nameDiff && (
-                                                                    <div className="flex items-center flex-wrap gap-1">
-                                                                        <span className="text-[10px] font-bold px-1.5 rounded bg-amber-100 text-amber-800">상호</span>
-                                                                        <span className="line-through text-stone-400">{t.fileName}</span><span>→</span>
-                                                                        <span className="font-extrabold text-stone-800">{t.masterName}</span>
-                                                                    </div>
-                                                                )}
-                                                                {t.repDiff && (
-                                                                    <div className="flex items-center flex-wrap gap-1">
-                                                                        <span className="text-[10px] font-bold px-1.5 rounded bg-rose-100 text-rose-800">대표</span>
-                                                                        <span className="font-bold text-stone-700">{t.masterName}:</span>
-                                                                        <span className="line-through text-stone-400">{t.fileRep}</span><span>→</span>
-                                                                        <span className="font-extrabold text-amber-800">{t.masterRep}</span>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            <div className="grid grid-cols-3 gap-2 mb-4">
-                                                {['제주시', '신제주', '서쪽', '동쪽', '서귀포', '미분류'].map(r => {
-                                                    const sum = currentDoc.data.filter(d => {
-                                                        const m = findSmartMaster(d.name, d.rep, d.phone, d.address) || {};
-                                                        const resolvedAddr = m.address || d.address || "";
-                                                        const reg = (m.region && m.region !== "미분류") ? m.region : (d.region && d.region !== "미분류" ? d.region : inferRegionByAddress(resolvedAddr));
-                                                        return reg === r;
-                                                    }).reduce((acc, cur) => acc + (Number(cur.sacks) || 0) + (Number(cur.usSacks) || 0), 0);
-                                                    if (sum === 0 && r === '미분류') return null;
-                                                    return (
-                                                        <div key={r} className={`p-2.5 rounded-2xl border text-center ${r === '미분류' ? 'bg-[#fdf3f2] border-[#f5d5d2]' : 'bg-[#f7f4ef] border-[#e8e2d9]'}`}>
-                                                            <div className="text-[11px] text-stone-500 font-bold">{r}</div>
-                                                            <div className="text-sm font-extrabold text-stone-800">{sum}포</div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-2 mb-3">
-                                                <button 
-                                                    onClick={() => exportToExcel(currentDoc, currentDoc.itemType || selectedItemType)} 
-                                                    className="w-full bg-[#3b6e52] hover:bg-[#2f5942] text-[#fdfbf7] font-extrabold py-3.5 rounded-2xl flex items-center justify-center shadow-md transition active:scale-95 text-xs"
-                                                >
-                                                    <Icon name="download" size={16} className="mr-1.5" />
-                                                    분류 엑셀 다운
-                                                </button>
-                                                <button 
-                                                    onClick={() => { setSelectedDeliveryDocId(currentDoc.id); setActiveTab('my_delivery'); }} 
-                                                    className="w-full bg-amber-700 hover:bg-amber-800 text-[#fdfbf7] font-extrabold py-3.5 rounded-2xl flex items-center justify-center shadow-md transition active:scale-95 text-xs"
-                                                >
-                                                    <Icon name="check-square" size={16} className="mr-1.5" />
-                                                    나의 하차지 체크
-                                                </button>
-                                            </div>
-
-                                            <div className="pt-3 border-t border-[#f0e9df]">
-                                                <p className="text-[10px] font-bold text-stone-400 mb-2 flex items-center">
-                                                    <Icon name="copy" size={12} className="mr-1" /> 기사님 전달용 권역별 카톡 명단 원터치 복사
-                                                </p>
-                                                <div className={`grid ${currentUnclassifiedSum > 0 ? 'grid-cols-2' : 'grid-cols-3'} gap-1.5`}>
-                                                    <button onClick={() => copyRegionKakaoText(currentDoc, ['제주시', '신제주'], '제주시·신제주')} className="bg-[#f4eee4] hover:bg-[#e8e0d3] text-stone-700 py-2 rounded-xl text-[11px] font-extrabold active:scale-95 transition">제주시·신제주</button>
-                                                    <button onClick={() => copyRegionKakaoText(currentDoc, ['서쪽'], '서쪽')} className="bg-[#f4eee4] hover:bg-[#e8e0d3] text-stone-700 py-2 rounded-xl text-[11px] font-extrabold active:scale-95 transition">서쪽 권역</button>
-                                                    <button onClick={() => copyRegionKakaoText(currentDoc, ['동쪽', '서귀포'], '동쪽·서귀포')} className="bg-[#f4eee4] hover:bg-[#e8e0d3] text-stone-700 py-2 rounded-xl text-[11px] font-extrabold active:scale-95 transition">동쪽·서귀포</button>
-                                                    {currentUnclassifiedSum > 0 && (
-                                                        <button onClick={() => copyRegionKakaoText(currentDoc, ['미분류'], '미분류')} className="bg-rose-100 hover:bg-rose-200 text-rose-800 py-2 rounded-xl text-[11px] font-extrabold active:scale-95 transition border border-rose-300">
-                                                            ⚠️ 미분류 ({currentUnclassifiedSum}포)
-                                                        </button>
-                                                    )}
-                                                </div>
+                                            <div className="text-right shrink-0">
+                                                <p className="text-[10px] text-stone-400 font-medium">총 배정 (국산+미국산)</p>
+                                                <p className="text-2xl font-black text-stone-800 leading-tight">{currentDoc.totalSacks}<span className="text-xs font-normal ml-0.5">포</span></p>
+                                                {currentDoc.totalUsSacks > 0 && (
+                                                    <p className="text-[10px] text-rose-700 font-bold">국산 {currentDoc.totalKrSacks} · 미국산 {currentDoc.totalUsSacks}</p>
+                                                )}
                                             </div>
                                         </div>
-                                    );
-                                })()}
+
+                                        {currentDoc.totalMismatch && (
+                                            <div className="mb-3 p-3 bg-rose-50 border border-rose-300 rounded-2xl text-rose-800 text-xs font-extrabold flex items-center">
+                                                <Icon name="alert-triangle" size={16} className="mr-2 shrink-0 text-rose-600" />
+                                                <span>팩스 기준({currentDoc.expectedTotal}포)과 추출 합계({currentDoc.totalSacks}포)가 다릅니다. 원본을 확인해 주세요.</span>
+                                            </div>
+                                        )}
+
+                                        {currentDocSummary.unclassifiedSum > 0 && (
+                                            <div className="mb-3 p-3 bg-[#fdf3f2] border border-[#f5d5d2] rounded-2xl flex items-center justify-between">
+                                                <div className="flex items-center text-[#9e3b33] text-xs font-bold">
+                                                    <Icon name="alert-circle" size={15} className="mr-1.5" />
+                                                    <span>미분류 물량 {currentDocSummary.unclassifiedSum}포 발견</span>
+                                                </div>
+                                                <button onClick={() => setActiveTab('regions')} className="text-[11px] bg-[#fffdfa] text-[#9e3b33] px-2.5 py-1 rounded-lg border border-[#f0c2be] font-bold">하차지 목록</button>
+                                            </div>
+                                        )}
+
+                                        {currentDocSummary.liveUnregistered.length > 0 && (
+                                            <div className="mb-3 p-3 bg-[#fdf3f2] border border-[#f5d5d2] rounded-2xl space-y-2">
+                                                <div className="flex items-center justify-between text-[#9e3b33] text-xs font-extrabold">
+                                                    <span className="flex items-center"><Icon name="user-x" size={14} className="mr-1.5" />명단 미등록 ({currentDocSummary.liveUnregistered.length}곳)</span>
+                                                    <span className="text-[10px] opacity-80">터치 시 바로 등록</span>
+                                                </div>
+                                                <div className="max-h-32 overflow-y-auto space-y-1.5 pr-0.5">
+                                                    {currentDocSummary.liveUnregistered.map((u, idx) => (
+                                                        <div key={idx} className="bg-white/90 px-2.5 py-1.5 rounded-xl border border-[#f5d5d2] flex items-center justify-between text-[11px]">
+                                                            <div className="min-w-0 pr-2">
+                                                                <span className="font-extrabold text-stone-800">{u.name}</span>
+                                                                {u.rep && <span className="text-stone-500 ml-1">({u.rep})</span>}
+                                                                <span className="text-rose-700 font-bold ml-1.5">{u.sacks}포</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setNewCompName(u.name || ''); setNewCompRep(u.rep || '');
+                                                                    setNewCompAddress(u.address || ''); setNewCompPhone(u.phone || '');
+                                                                    const g = inferRegionByAddress(u.address);
+                                                                    setNewCompRegion(g === '미분류' ? '제주시' : g);
+                                                                    setActiveTab('regions');
+                                                                }}
+                                                                className="shrink-0 bg-[#9e3b33] text-white px-2.5 py-1 rounded-lg font-bold text-[10px]"
+                                                            >등록</button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {currentDoc.typoList && currentDoc.typoList.length > 0 && (
+                                            <div className="mb-3 p-3 bg-[#fef9ec] border border-[#f2deb0] rounded-2xl space-y-1.5">
+                                                <div className="flex items-center justify-between text-[#8a6016] text-xs font-extrabold">
+                                                    <span className="flex items-center"><Icon name="alert-triangle" size={14} className="mr-1.5" />오타·표기 자동보정 ({currentDoc.typoList.length}건)</span>
+                                                </div>
+                                                <div className="max-h-28 overflow-y-auto space-y-1 pr-0.5">
+                                                    {currentDoc.typoList.map((t, idx) => (
+                                                        <div key={idx} className="bg-white/90 px-2.5 py-1.5 rounded-xl border border-[#f2deb0] text-[11px]">
+                                                            {t.nameDiff && (
+                                                                <div className="flex items-center flex-wrap gap-1">
+                                                                    <span className="text-[10px] font-bold px-1.5 rounded bg-amber-100 text-amber-800">상호</span>
+                                                                    <span className="line-through text-stone-400">{t.fileName}</span><span>→</span>
+                                                                    <span className="font-extrabold text-stone-800">{t.masterName}</span>
+                                                                </div>
+                                                            )}
+                                                            {t.repDiff && (
+                                                                <div className="flex items-center flex-wrap gap-1">
+                                                                    <span className="text-[10px] font-bold px-1.5 rounded bg-rose-100 text-rose-800">대표</span>
+                                                                    <span className="font-bold text-stone-700">{t.masterName}:</span>
+                                                                    <span className="line-through text-stone-400">{t.fileRep}</span><span>→</span>
+                                                                    <span className="font-extrabold text-amber-800">{t.masterRep}</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="grid grid-cols-3 gap-2 mb-4">
+                                            {REGIONS_ORDER.map(r => {
+                                                const sum = currentDocSummary.regionSums[r] || 0;
+                                                if (sum === 0 && r === '미분류') return null;
+                                                return (
+                                                    <div key={r} className={`p-2.5 rounded-2xl border text-center ${r === '미분류' ? 'bg-[#fdf3f2] border-[#f5d5d2]' : 'bg-[#f7f4ef] border-[#e8e2d9]'}`}>
+                                                        <div className="text-[11px] text-stone-500 font-bold">{r}</div>
+                                                        <div className="text-sm font-extrabold text-stone-800">{sum}포</div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2 mb-3">
+                                            <button
+                                                onClick={() => exportToExcel(currentDoc, currentDoc.itemType || selectedItemType)}
+                                                className="w-full bg-[#3b6e52] hover:bg-[#2f5942] text-[#fdfbf7] font-extrabold py-3.5 rounded-2xl flex items-center justify-center shadow-md transition active:scale-95 text-xs"
+                                            >
+                                                <Icon name="download" size={16} className="mr-1.5" />
+                                                분류 엑셀 다운
+                                            </button>
+                                            <button
+                                                onClick={() => { setSelectedDeliveryDocId(currentDoc.id); setActiveTab('my_delivery'); }}
+                                                className="w-full bg-amber-700 hover:bg-amber-800 text-[#fdfbf7] font-extrabold py-3.5 rounded-2xl flex items-center justify-center shadow-md transition active:scale-95 text-xs"
+                                            >
+                                                <Icon name="check-square" size={16} className="mr-1.5" />
+                                                나의 하차지 체크
+                                            </button>
+                                        </div>
+
+                                        <div className="pt-3 border-t border-[#f0e9df]">
+                                            <p className="text-[10px] font-bold text-stone-400 mb-2 flex items-center">
+                                                <Icon name="copy" size={12} className="mr-1" /> 기사님 전달용 권역별 카톡 명단 원터치 복사
+                                            </p>
+                                            <div className={`grid ${currentDocSummary.unclassifiedSum > 0 ? 'grid-cols-2' : 'grid-cols-3'} gap-1.5`}>
+                                                <button onClick={() => copyRegionKakaoText(currentDoc, ['제주시', '신제주'], '제주시·신제주')} className="bg-[#f4eee4] hover:bg-[#e8e0d3] text-stone-700 py-2 rounded-xl text-[11px] font-extrabold active:scale-95 transition">제주시·신제주</button>
+                                                <button onClick={() => copyRegionKakaoText(currentDoc, ['서쪽'], '서쪽')} className="bg-[#f4eee4] hover:bg-[#e8e0d3] text-stone-700 py-2 rounded-xl text-[11px] font-extrabold active:scale-95 transition">서쪽 권역</button>
+                                                <button onClick={() => copyRegionKakaoText(currentDoc, ['동쪽', '서귀포'], '동쪽·서귀포')} className="bg-[#f4eee4] hover:bg-[#e8e0d3] text-stone-700 py-2 rounded-xl text-[11px] font-extrabold active:scale-95 transition">동쪽·서귀포</button>
+                                                {currentDocSummary.unclassifiedSum > 0 && (
+                                                    <button onClick={() => copyRegionKakaoText(currentDoc, ['미분류'], '미분류')} className="bg-rose-100 hover:bg-rose-200 text-rose-800 py-2 rounded-xl text-[11px] font-extrabold active:scale-95 transition border border-rose-300">
+                                                        미분류 ({currentDocSummary.unclassifiedSum}포)
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
                         {activeTab === 'my_delivery' && (() => {
                             const activeDoc = history.find(h => h.id === selectedDeliveryDocId) || history[0] || null;
                             const allRows = activeDoc ? (activeDoc.data || []).map((r, i) => {
-                                const m = findSmartMaster(r.name, r.rep, r.phone, r.address) || {};
-                                const resolvedAddr = m.address || r.address || '';
+                                const resolved = resolveRowWithMaster(r, masterData);
                                 const totalRowSacks = (Number(r.sacks) || 0) + (Number(r.usSacks) || 0);
                                 const mySacksVal = getEffectiveMySacks(r);
                                 const isSplit = Boolean(r.completed && r.mySacks !== undefined && r.mySacks !== null && Number(r.mySacks) < totalRowSacks);
                                 return {
                                     ...r,
-                                    name: m.name || r.name,
+                                    name: resolved.name,
                                     origIdx: i,
-                                    resolvedRegion: (m.region && m.region !== '미분류') ? m.region : (r.region && r.region !== '미분류' ? r.region : inferRegionByAddress(resolvedAddr)),
-                                    address: resolvedAddr,
-                                    phone: m.phone || r.phone || '',
+                                    resolvedRegion: resolved.region,
+                                    address: resolved.address,
+                                    phone: resolved.phone,
                                     totalRowSacks,
                                     mySacksVal,
                                     isSplit
@@ -1847,10 +2014,11 @@
                             const regionTabs = hasUnclassified
                                 ? ['전체', '제주시', '신제주', '서쪽', '동쪽', '서귀포', '미분류']
                                 : ['전체', '제주시', '신제주', '서쪽', '동쪽', '서귀포'];
+                            const activeRegionFilter = regionTabs.includes(deliveryRegionFilter) ? deliveryRegionFilter : '전체';
 
-                            const filteredRows = deliveryRegionFilter === '전체'
+                            const filteredRows = activeRegionFilter === '전체'
                                 ? allRows
-                                : allRows.filter(r => r.resolvedRegion === deliveryRegionFilter);
+                                : allRows.filter(r => r.resolvedRegion === activeRegionFilter);
 
                             const checkedFilteredRows = filteredRows.filter(r => r.completed);
                             const myDoneSacks = checkedFilteredRows.reduce((acc, cur) => acc + cur.mySacksVal, 0);
@@ -1887,7 +2055,7 @@
                                                     key={reg}
                                                     onClick={() => setDeliveryRegionFilter(reg)}
                                                     className={`px-3 py-1.5 rounded-xl text-xs font-extrabold shrink-0 transition ${
-                                                        deliveryRegionFilter === reg
+                                                        activeRegionFilter === reg
                                                             ? (reg === '미분류' ? 'bg-rose-700 text-white shadow-sm' : 'bg-stone-800 text-white shadow-sm')
                                                             : (reg === '미분류' ? 'bg-rose-100 text-rose-800' : 'bg-[#f4eee4] text-stone-600')
                                                     }`}
@@ -1898,10 +2066,10 @@
                                         {activeDoc && filteredRows.length > 0 && (
                                             <div className="flex gap-2">
                                                 <button onClick={() => setBulkDeliveryComplete(activeDoc, targetIndices, true)} className="flex-1 bg-[#e3ece6] text-[#2c5e43] py-2 rounded-xl text-xs font-extrabold flex items-center justify-center active:scale-95 transition">
-                                                    <Icon name="check-square" size={14} className="mr-1" />[{deliveryRegionFilter}] 전체 체크
+                                                    <Icon name="check-square" size={14} className="mr-1" />[{activeRegionFilter}] 전체 체크
                                                 </button>
                                                 <button onClick={() => setBulkDeliveryComplete(activeDoc, targetIndices, false)} className="flex-1 bg-[#fdf3f2] text-[#9e3b33] py-2 rounded-xl text-xs font-extrabold flex items-center justify-center border border-[#f5d5d2] active:scale-95 transition">
-                                                    <Icon name="rotate-ccw" size={14} className="mr-1" />[{deliveryRegionFilter}] 체크 해지
+                                                    <Icon name="rotate-ccw" size={14} className="mr-1" />[{activeRegionFilter}] 체크 해지
                                                 </button>
                                             </div>
                                         )}
@@ -1910,7 +2078,7 @@
                                     {activeDoc && (
                                         <div className="bg-stone-800 text-[#fdfbf7] p-4 rounded-[24px] shadow-md flex justify-between items-center">
                                             <div>
-                                                <p className="text-stone-400 text-[11px] font-bold mb-0.5">내가 돌린 갯수 ({deliveryRegionFilter})</p>
+                                                <p className="text-stone-400 text-[11px] font-bold mb-0.5">내가 돌린 갯수 ({activeRegionFilter})</p>
                                                 <div className="flex items-baseline space-x-1">
                                                     <span className="text-3xl font-black text-amber-400">{myDoneSacks}</span>
                                                     <span className="text-sm font-bold text-stone-200">포</span>
@@ -2037,7 +2205,7 @@
                                                                     type="button"
                                                                     onClick={async () => {
                                                                         const ok = await copyTextSafe(row.address);
-                                                                        if (ok) showToast(`📍 '${row.name}' 주소 복사 완료!`, "success");
+                                                                        if (ok) showToast(`'${row.name}' 주소가 복사되었습니다.`, "success");
                                                                     }}
                                                                     className="flex-1 bg-[#f4eee4] text-stone-700 py-1.5 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center active:scale-95 transition"
                                                                 >
@@ -2080,7 +2248,7 @@
                                     history.map(doc => {
                                         const doneSacks = (doc.data || []).reduce((a, c) => a + getEffectiveMySacks(c), 0);
                                         return (
-                                            <div key={doc.id} onClick={() => { setCurrentDoc(doc); setActiveTab('upload'); }} className="bg-[#fffdfa] p-4 rounded-2xl shadow-sm border border-[#e6dfd5] flex justify-between items-center cursor-pointer active:bg-[#f7f4ef] transition">
+                                            <div key={doc.id} onClick={() => { setCurrentDocId(doc.id); setActiveTab('upload'); }} className="bg-[#fffdfa] p-4 rounded-2xl shadow-sm border border-[#e6dfd5] flex justify-between items-center cursor-pointer active:bg-[#f7f4ef] transition">
                                                 <div className="overflow-hidden pr-3">
                                                     <div className="flex items-center space-x-1.5 mb-1">
                                                         <span className="text-[10px] font-bold bg-[#f4eee4] text-stone-700 px-2 py-0.5 rounded-md">{doc.yearMonth}</span>
@@ -2151,7 +2319,7 @@
                                         <Icon name="map-pin" size={15} className="mr-1.5 text-stone-500" /> 권역별 통계 (내가 돌린 갯수 / 전체)
                                     </h4>
                                     <div className="space-y-3.5">
-                                        {['제주시', '신제주', '서쪽', '동쪽', '서귀포', '미분류'].map(r => {
+                                        {REGIONS_ORDER.map(r => {
                                             const count = filteredStats.byRegion[r] || 0;
                                             const doneCount = filteredStats.completedByRegion[r] || 0;
                                             if (count === 0 && r === '미분류') return null;
@@ -2208,7 +2376,7 @@
                                         <b>떡집명단_최종.xlsx</b> 파일을 올리시면 모든 명단을 문서 1개에 압축 저장해 무료 한도를 아끼면서 동기화합니다.
                                     </p>
                                     <label className="block w-full bg-[#3b6e52] hover:bg-[#2f5942] text-white text-center font-bold py-2.5 rounded-xl text-xs cursor-pointer transition active:scale-95 shadow-sm">
-                                        📂 떡집명단 엑셀 파일 올리기
+                                        떡집명단 엑셀 파일 올리기
                                         <input type="file" accept=".xlsx, .xls, .csv" onChange={handleMasterExcelUpload} className="hidden" />
                                     </label>
                                 </div>
@@ -2312,9 +2480,9 @@
                             { id: 'stats', icon: 'pie-chart', label: '월별통계' },
                             { id: 'regions', icon: 'map-pin', label: '하차지 목록' }
                         ].map(tab => (
-                            <button 
-                                key={tab.id} 
-                                onClick={() => setActiveTab(tab.id)} 
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
                                 className={`flex flex-col items-center py-1 px-2 rounded-xl transition ${activeTab === tab.id ? 'text-stone-900 font-extrabold scale-105' : 'text-stone-400 font-medium hover:text-stone-600'}`}
                             >
                                 <Icon name={tab.icon} size={19} className={activeTab === tab.id ? 'text-amber-800' : ''} />
