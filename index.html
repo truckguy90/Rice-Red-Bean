@@ -114,6 +114,15 @@
                 setTimeout(() => setToast(null), 3500);
             };
 
+            // 내가 실제 하차한 포대 수 계산 (전체 체크 vs 절반/부분 체크 반영)
+            const getEffectiveMySacks = (row) => {
+                if (!row || !row.completed) return 0;
+                if (row.mySacks !== undefined && row.mySacks !== null) {
+                    return Number(row.mySacks) || 0;
+                }
+                return (Number(row.sacks) || 0) + (Number(row.usSacks) || 0);
+            };
+
             // 주소 문자열을 기반으로 제주 권역 자동 추론
             const inferRegionByAddress = (address = "") => {
                 const addr = String(address).trim();
@@ -377,6 +386,8 @@
                 const parsedList = [];
                 let totalSacks = 0;
                 let unclassifiedCount = 0;
+                const unregisteredList = [];
+                const typoList = [];
 
                 for (let i = headerRowIdx + 1; i < rows.length; i++) {
                     const row = rows[i];
@@ -415,6 +426,37 @@
                         unclassifiedCount++;
                     }
 
+                    // 미등록 업체 및 오타·표기 불일치 검증
+                    if (!master) {
+                        unregisteredList.push({
+                            no: origNo,
+                            name: cleanName,
+                            rep: rep,
+                            phone: rowPhone,
+                            address: rowAddr,
+                            sacks: sacks + usSacks
+                        });
+                    } else {
+                        const normFileName = cleanName.replace(/\s+/g, "");
+                        const normMasterName = String(master.name || "").replace(/\s+/g, "");
+                        const normFileRep = String(rep || "").replace(/외\s*\d+명?|\s+/g, "").trim();
+                        const normMasterRep = String(master.rep || "").replace(/외\s*\d+명?|\s+/g, "").trim();
+                        const nameDiff = normFileName !== normMasterName;
+                        const repDiff = Boolean(normFileRep && normMasterRep && normFileRep !== normMasterRep);
+
+                        if (nameDiff || repDiff) {
+                            typoList.push({
+                                no: origNo,
+                                fileName: cleanName,
+                                masterName: master.name,
+                                fileRep: rep,
+                                masterRep: master.rep || "",
+                                nameDiff,
+                                repDiff
+                            });
+                        }
+                    }
+
                     totalSacks += sacks;
 
                     parsedList.push({
@@ -427,6 +469,7 @@
                         sacks: sacks,
                         usSacks: usSacks,
                         completed: false,
+                        mySacks: null,
                         originalRow: row
                     });
                 }
@@ -445,11 +488,17 @@
                     timestamp: Date.now(),
                     totalSacks,
                     unclassifiedCount,
+                    unregisteredList,
+                    typoList,
                     data: parsedList
                 };
 
                 setCurrentDoc(newDoc);
                 setSelectedDeliveryDocId(docId);
+
+                const alertSuffix = (unregisteredList.length > 0 || typoList.length > 0)
+                    ? ` (미등록 ${unregisteredList.length}·오타/확인 ${typoList.length})`
+                    : "";
 
                 if (user && fbApi) {
                     try {
@@ -462,35 +511,102 @@
                             timestamp: newDoc.timestamp,
                             totalSacks: newDoc.totalSacks,
                             unclassifiedCount: newDoc.unclassifiedCount,
+                            unregisteredList: newDoc.unregisteredList,
+                            typoList: newDoc.typoList,
                             recordsJson: JSON.stringify(newDoc.data)
                         });
-                        showToast(`분류 및 클라우드 저장 완료! (총 ${totalSacks}포)`, "success");
+                        showToast(`분류 및 저장 완료! (총 ${totalSacks}포)${alertSuffix}`, (unregisteredList.length > 0 || typoList.length > 0) ? "error" : "success");
                     } catch (e) {
                         console.error("Save history error", e);
                         showToast("클라우드 저장 실패 (임시 상태로만 열람 가능)", "error");
                     }
                 } else {
                     setHistory(prev => [newDoc, ...prev]);
-                    showToast(`분류 완료! (총 ${totalSacks}포)`, "success");
+                    showToast(`분류 완료! (총 ${totalSacks}포)${alertSuffix}`, (unregisteredList.length > 0 || typoList.length > 0) ? "error" : "success");
+                }
+            };
+            const persistDocUpdate = async (updatedDoc) => {
+                if (currentDoc && currentDoc.id === updatedDoc.id) {
+                    setCurrentDoc(updatedDoc);
+                }
+                setHistory(prev => prev.map(h => h.id === updatedDoc.id ? updatedDoc : h));
+
+                if (user && fbApi) {
+                    try {
+                        const { db, doc, setDoc } = fbApi;
+                        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', updatedDoc.id);
+                        await setDoc(docRef, {
+                            fileName: updatedDoc.fileName,
+                            yearMonth: updatedDoc.yearMonth,
+                            uploadDate: updatedDoc.uploadDate,
+                            timestamp: updatedDoc.timestamp,
+                            totalSacks: updatedDoc.totalSacks,
+                            unclassifiedCount: updatedDoc.unclassifiedCount,
+                            unregisteredList: updatedDoc.unregisteredList || [],
+                            typoList: updatedDoc.typoList || [],
+                            recordsJson: JSON.stringify(updatedDoc.data)
+                        });
+                    } catch (e) {
+                        console.error("Update doc error:", e);
+                    }
                 }
             };
 
-            const deleteHistoryDoc = async (id, e) => {
-                e.stopPropagation();
-                if (user && fbApi) {
-                    try {
-                        const { db, doc, deleteDoc } = fbApi;
-                        await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'history', id));
-                        showToast("내역이 삭제되었습니다.");
-                        if (currentDoc && currentDoc.id === id) setCurrentDoc(null);
-                    } catch (err) {
-                        showToast("삭제 중 오류가 발생했습니다.", "error");
+            const toggleDeliveryComplete = async (docObj, rowIndex) => {
+                if (!docObj) return;
+                const updatedData = docObj.data.map((item, idx) => {
+                    if (idx === rowIndex) {
+                        return { ...item, completed: !item.completed, mySacks: null };
                     }
-                } else {
-                    setHistory(prev => prev.filter(item => item.id !== id));
-                    if (currentDoc && currentDoc.id === id) setCurrentDoc(null);
-                    showToast("내역이 삭제되었습니다.");
-                }
+                    return item;
+                });
+                await persistDocUpdate({ ...docObj, data: updatedData });
+            };
+
+            // 절반 체크 토글 (두 대 차량이 나눠 하차하는 경우)
+            const toggleHalfDelivery = async (docObj, rowIndex) => {
+                if (!docObj) return;
+                const updatedData = docObj.data.map((item, idx) => {
+                    if (idx === rowIndex) {
+                        const total = (Number(item.sacks) || 0) + (Number(item.usSacks) || 0);
+                        const isCurrentlySplit = Boolean(item.completed && item.mySacks !== undefined && item.mySacks !== null && Number(item.mySacks) < total);
+                        if (isCurrentlySplit) {
+                            return { ...item, completed: true, mySacks: null };
+                        }
+                        const halfVal = total >= 2 ? Math.floor(total / 2) : total;
+                        return { ...item, completed: true, mySacks: halfVal };
+                    }
+                    return item;
+                });
+                await persistDocUpdate({ ...docObj, data: updatedData });
+            };
+
+            // 분할 하차 수량 미세 조정 (+1 / -1 포)
+            const adjustMySacks = async (docObj, rowIndex, delta) => {
+                if (!docObj) return;
+                const updatedData = docObj.data.map((item, idx) => {
+                    if (idx === rowIndex) {
+                        const total = (Number(item.sacks) || 0) + (Number(item.usSacks) || 0);
+                        const cur = (item.mySacks !== undefined && item.mySacks !== null) ? Number(item.mySacks) : total;
+                        const nextVal = Math.max(1, Math.min(total, cur + delta));
+                        return { ...item, completed: true, mySacks: nextVal === total ? null : nextVal };
+                    }
+                    return item;
+                });
+                await persistDocUpdate({ ...docObj, data: updatedData });
+            };
+
+            const setBulkDeliveryComplete = async (docObj, targetIndices, status) => {
+                if (!docObj || !targetIndices || targetIndices.length === 0) return;
+                const idxSet = new Set(targetIndices);
+                const updatedData = docObj.data.map((item, idx) => {
+                    if (idxSet.has(idx)) {
+                        return { ...item, completed: status, mySacks: null };
+                    }
+                    return item;
+                });
+                await persistDocUpdate({ ...docObj, data: updatedData });
+                showToast(status ? `${targetIndices.length}곳 일괄 체크 완료!` : `${targetIndices.length}곳 체크 해지 완료!`, "success");
             };
 
             const toggleDeliveryComplete = async (docObj, rowIndex) => {
@@ -1018,11 +1134,12 @@
                         byRegion[r] = (byRegion[r] || 0) + s;
                         byCompany[canonicalName] = (byCompany[canonicalName] || 0) + s;
 
-                        if (row.completed) {
-                            completedSacks += s;
+                        const myS = getEffectiveMySacks(row);
+                        if (row.completed && myS > 0) {
+                            completedSacks += myS;
                             completedCount += 1;
-                            completedByRegion[r] = (completedByRegion[r] || 0) + s;
-                            completedByCompany[canonicalName] = (completedByCompany[canonicalName] || 0) + s;
+                            completedByRegion[r] = (completedByRegion[r] || 0) + myS;
+                            completedByCompany[canonicalName] = (completedByCompany[canonicalName] || 0) + myS;
                         }
                     });
                 });
@@ -1113,6 +1230,83 @@
                                             </div>
                                         )}
 
+                                        {/* 미등록 업체 알림 목록 */}
+                                        {currentDoc.unregisteredList && currentDoc.unregisteredList.length > 0 && (
+                                            <div className="mb-4 p-3.5 bg-[#fdf3f2] border border-[#f5d5d2] rounded-2xl space-y-2">
+                                                <div className="flex items-center justify-between text-[#9e3b33] text-xs font-extrabold">
+                                                    <span className="flex items-center">
+                                                        <Icon name="user-x" size={15} className="mr-1.5 shrink-0" />
+                                                        명단 미등록 업체 ({currentDoc.unregisteredList.length}곳)
+                                                    </span>
+                                                    <span className="text-[10px] font-bold opacity-80">터치 시 바로 등록</span>
+                                                </div>
+                                                <div className="max-h-36 overflow-y-auto space-y-1.5 pr-0.5">
+                                                    {currentDoc.unregisteredList.map((u, idx) => (
+                                                        <div key={idx} className="bg-white/90 px-3 py-2 rounded-xl border border-[#f5d5d2] flex items-center justify-between text-[11px]">
+                                                            <div className="min-w-0 pr-2">
+                                                                <span className="font-extrabold text-stone-800">{u.name}</span>
+                                                                {u.rep && <span className="text-stone-500 ml-1">({u.rep})</span>}
+                                                                <span className="text-rose-700 font-bold ml-1.5">{u.sacks}포</span>
+                                                                {(u.phone || u.address) && (
+                                                                    <p className="text-[10px] text-stone-400 truncate">{u.address || ''} {u.phone || ''}</p>
+                                                                )}
+                                                            </div>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setNewCompName(u.name || '');
+                                                                    setNewCompRep(u.rep || '');
+                                                                    setNewCompAddress(u.address || '');
+                                                                    setNewCompPhone(u.phone || '');
+                                                                    const guessed = inferRegionByAddress(u.address);
+                                                                    setNewCompRegion(guessed === '미분류' ? '제주시' : guessed);
+                                                                    setActiveTab('regions');
+                                                                }}
+                                                                className="shrink-0 bg-[#9e3b33] text-white px-2.5 py-1 rounded-lg font-bold text-[10px] active:scale-95 transition"
+                                                            >
+                                                                등록
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* 오타 및 상호/대표자 불일치 자동 보정 확인 알림 */}
+                                        {currentDoc.typoList && currentDoc.typoList.length > 0 && (
+                                            <div className="mb-4 p-3.5 bg-[#fef9ec] border border-[#f2deb0] rounded-2xl space-y-2">
+                                                <div className="flex items-center justify-between text-[#8a6016] text-xs font-extrabold">
+                                                    <span className="flex items-center">
+                                                        <Icon name="alert-triangle" size={15} className="mr-1.5 shrink-0" />
+                                                        오타·표기 불일치 확인 ({currentDoc.typoList.length}건)
+                                                    </span>
+                                                    <span className="text-[10px] font-bold opacity-80">명단 기준 매칭됨</span>
+                                                </div>
+                                                <div className="max-h-36 overflow-y-auto space-y-1.5 pr-0.5">
+                                                    {currentDoc.typoList.map((t, idx) => (
+                                                        <div key={idx} className="bg-white/90 px-3 py-2 rounded-xl border border-[#f2deb0] text-[11px] space-y-0.5">
+                                                            {t.nameDiff && (
+                                                                <div className="flex items-center flex-wrap gap-1">
+                                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">상호</span>
+                                                                    <span className="line-through text-stone-400">{t.fileName}</span>
+                                                                    <span className="text-stone-400">→</span>
+                                                                    <span className="font-extrabold text-stone-800">{t.masterName}</span>
+                                                                </div>
+                                                            )}
+                                                            {t.repDiff && (
+                                                                <div className="flex items-center flex-wrap gap-1">
+                                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">대표자</span>
+                                                                    <span className="font-bold text-stone-700">{t.masterName}:</span>
+                                                                    <span className="line-through text-stone-400">{t.fileRep}</span>
+                                                                    <span className="text-stone-400">→</span>
+                                                                    <span className="font-extrabold text-amber-800">{t.masterRep}</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <div className="grid grid-cols-3 gap-2.5 mb-5">
                                             {['제주시', '신제주', '서쪽', '동쪽', '서귀포', '미분류'].map(r => {
                                                 const sum = currentDoc.data.filter(d => {
@@ -1158,6 +1352,9 @@
                             const allRows = activeDoc ? activeDoc.data.map((r, i) => {
                                 const m = findSmartMaster(r.name, r.rep, r.phone, r.address) || {};
                                 const resolvedAddr = m.address || r.address || '';
+                                const totalRowSacks = (Number(r.sacks) || 0) + (Number(r.usSacks) || 0);
+                                const mySacksVal = getEffectiveMySacks(r);
+                                const isSplit = Boolean(r.completed && r.mySacks !== undefined && r.mySacks !== null && Number(r.mySacks) < totalRowSacks);
                                 return {
                                     ...r,
                                     name: m.name || r.name,
@@ -1165,7 +1362,9 @@
                                     resolvedRegion: (m.region && m.region !== '미분류') ? m.region : (r.region && r.region !== '미분류' ? r.region : inferRegionByAddress(resolvedAddr)),
                                     address: resolvedAddr,
                                     phone: m.phone || r.phone || '',
-                                    totalRowSacks: (Number(r.sacks) || 0) + (Number(r.usSacks) || 0)
+                                    totalRowSacks,
+                                    mySacksVal,
+                                    isSplit
                                 };
                             }) : [];
 
@@ -1174,7 +1373,7 @@
                                 : allRows.filter(r => r.resolvedRegion === deliveryRegionFilter);
 
                             const checkedFilteredRows = filteredRows.filter(r => r.completed);
-                            const myDoneSacks = checkedFilteredRows.reduce((acc, cur) => acc + cur.totalRowSacks, 0);
+                            const myDoneSacks = checkedFilteredRows.reduce((acc, cur) => acc + cur.mySacksVal, 0);
                             const myDonePlaces = checkedFilteredRows.length;
                             const targetIndices = filteredRows.map(r => r.origIdx);
 
@@ -1299,8 +1498,8 @@
                                                 <thead>
                                                     <tr className="bg-[#f4eee4] border-b border-[#e6dfd5] text-stone-700 text-xs font-extrabold">
                                                         <th className="py-3.5 px-4">업체명</th>
-                                                        <th className="py-3.5 px-3 text-center w-20">포대</th>
-                                                        <th className="py-3.5 px-4 text-center w-24">하차 완료</th>
+                                                        <th className="py-3.5 px-2 text-center w-24">포대</th>
+                                                        <th className="py-3.5 px-3 text-center w-28">하차 완료</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-[#f4eee4] text-xs">
@@ -1309,7 +1508,11 @@
                                                             key={row.origIdx}
                                                             onClick={() => toggleDeliveryComplete(activeDoc, row.origIdx)}
                                                             className={`cursor-pointer transition ${
-                                                                row.completed ? 'bg-[#eef5f0]/80 text-stone-400' : 'hover:bg-[#faf8f5] text-stone-800'
+                                                                row.isSplit
+                                                                    ? 'bg-[#fef9ec]/90 text-stone-700'
+                                                                    : row.completed
+                                                                        ? 'bg-[#eef5f0]/80 text-stone-400'
+                                                                        : 'hover:bg-[#faf8f5] text-stone-800'
                                                             }`}
                                                         >
                                                             <td className="py-3.5 px-4">
@@ -1317,27 +1520,66 @@
                                                                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ede8df] text-stone-600 font-bold shrink-0">
                                                                         {row.resolvedRegion}
                                                                     </span>
-                                                                    <span className={`font-extrabold text-sm ${row.completed ? 'line-through text-stone-400' : 'text-stone-800'}`}>
+                                                                    <span className={`font-extrabold text-sm ${row.completed && !row.isSplit ? 'line-through text-stone-400' : 'text-stone-800'}`}>
                                                                         {row.name}
                                                                     </span>
                                                                 </div>
                                                                 {row.address && (
-                                                                    <p className="text-[11px] text-stone-400 truncate mt-0.5 max-w-[190px]">{row.address}</p>
+                                                                    <p className="text-[11px] text-stone-400 truncate mt-0.5 max-w-[175px]">{row.address}</p>
                                                                 )}
                                                             </td>
-                                                            <td className="py-3.5 px-3 text-center">
-                                                                <span className={`text-base font-black ${row.completed ? 'text-stone-400' : 'text-rose-700'}`}>
-                                                                    {row.totalRowSacks}
-                                                                </span>
-                                                                <span className="text-[11px] font-bold ml-0.5">포</span>
+                                                            <td className="py-3 px-2 text-center" onClick={(e) => { if (row.isSplit) e.stopPropagation(); }}>
+                                                                {row.isSplit ? (
+                                                                    <div className="flex flex-col items-center space-y-1">
+                                                                        <div>
+                                                                            <span className="text-base font-black text-amber-700">{row.mySacksVal}</span>
+                                                                            <span className="text-[10px] font-bold text-stone-400">/{row.totalRowSacks}포</span>
+                                                                        </div>
+                                                                        <div className="flex items-center space-x-1">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => adjustMySacks(activeDoc, row.origIdx, -1)}
+                                                                                className="w-5 h-5 rounded bg-[#e8dfd1] text-stone-700 font-black text-xs flex items-center justify-center active:scale-90"
+                                                                            >-</button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => adjustMySacks(activeDoc, row.origIdx, 1)}
+                                                                                className="w-5 h-5 rounded bg-[#e8dfd1] text-stone-700 font-black text-xs flex items-center justify-center active:scale-90"
+                                                                            >+</button>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div>
+                                                                        <span className={`text-base font-black ${row.completed ? 'text-stone-400' : 'text-rose-700'}`}>
+                                                                            {row.totalRowSacks}
+                                                                        </span>
+                                                                        <span className="text-[11px] font-bold ml-0.5">포</span>
+                                                                    </div>
+                                                                )}
                                                             </td>
-                                                            <td className="py-3.5 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={!!row.completed}
-                                                                    onChange={() => toggleDeliveryComplete(activeDoc, row.origIdx)}
-                                                                    className="w-6 h-6 accent-emerald-600 rounded-lg cursor-pointer align-middle"
-                                                                />
+                                                            <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                                                <div className="flex items-center justify-center space-x-2">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={!!row.completed}
+                                                                        onChange={() => toggleDeliveryComplete(activeDoc, row.origIdx)}
+                                                                        className="w-6 h-6 accent-emerald-600 rounded-lg cursor-pointer align-middle"
+                                                                    />
+                                                                    {row.totalRowSacks >= 2 && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => toggleHalfDelivery(activeDoc, row.origIdx)}
+                                                                            className={`px-2 py-1 rounded-lg text-[11px] font-extrabold transition active:scale-95 ${
+                                                                                row.isSplit
+                                                                                    ? 'bg-amber-600 text-white shadow-sm'
+                                                                                    : 'bg-[#f4eee4] text-stone-600 hover:bg-[#e6dfd5]'
+                                                                            }`}
+                                                                            title="수량 절반만 체크"
+                                                                        >
+                                                                            절반
+                                                                        </button>
+                                                                    )}
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     ))}
@@ -1375,6 +1617,11 @@
                                                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#f4eee4] text-stone-600">
                                                                     {row.resolvedRegion}
                                                                 </span>
+                                                                {row.isSplit && (
+                                                                    <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800">
+                                                                        절반
+                                                                    </span>
+                                                                )}
                                                                 <h4 className="font-extrabold text-sm text-stone-800 truncate">{row.name}</h4>
                                                             </div>
                                                             <p className="text-[11px] text-stone-500 truncate">
@@ -1384,17 +1631,31 @@
                                                                 <p className="text-[11px] text-stone-400 font-medium mt-0.5">{row.phone}</p>
                                                             )}
                                                         </div>
-                                                        <div className="flex items-center space-x-3 shrink-0">
+                                                        <div className="flex items-center space-x-2 shrink-0">
                                                             <div className="text-right">
-                                                                <span className="text-lg font-black text-amber-700">{row.totalRowSacks}</span>
-                                                                <span className="text-xs font-bold text-stone-600 ml-0.5">포</span>
+                                                                <span className="text-lg font-black text-amber-700">{row.mySacksVal}</span>
+                                                                <span className="text-xs font-bold text-stone-600 ml-0.5">
+                                                                    {row.isSplit ? `/${row.totalRowSacks}포` : '포'}
+                                                                </span>
                                                             </div>
+                                                            {row.totalRowSacks >= 2 && (
+                                                                <button
+                                                                    onClick={() => toggleHalfDelivery(activeDoc, row.origIdx)}
+                                                                    className={`px-2 py-2 rounded-xl text-[11px] font-extrabold active:scale-95 transition ${
+                                                                        row.isSplit
+                                                                            ? 'bg-amber-600 text-white'
+                                                                            : 'bg-[#f4eee4] text-stone-700'
+                                                                    }`}
+                                                                >
+                                                                    {row.isSplit ? '전체' : '절반'}
+                                                                </button>
+                                                            )}
                                                             <button
                                                                 onClick={() => toggleDeliveryComplete(activeDoc, row.origIdx)}
                                                                 className="bg-[#fdf3f2] hover:bg-[#f9e2e0] text-[#9e3b33] px-2.5 py-2 rounded-xl text-[11px] font-extrabold border border-[#f5d5d2] active:scale-95 transition"
                                                                 title="체크 해지"
                                                             >
-                                                                체크해지
+                                                                해지
                                                             </button>
                                                         </div>
                                                     </div>
@@ -1417,7 +1678,7 @@
                                     </div>
                                 ) : (
                                     history.map(doc => {
-                                        const doneSacks = doc.data.filter(r => r.completed).reduce((a, c) => a + (Number(c.sacks) || 0) + (Number(c.usSacks) || 0), 0);
+                                        const doneSacks = doc.data.reduce((a, c) => a + getEffectiveMySacks(c), 0);
                                         return (
                                             <div key={doc.id} onClick={() => { setCurrentDoc(doc); setActiveTab('upload'); }} className="bg-[#fffdfa] p-4 rounded-2xl shadow-sm border border-[#e6dfd5] flex justify-between items-center cursor-pointer active:bg-[#f7f4ef] transition">
                                                 <div className="overflow-hidden pr-3">
