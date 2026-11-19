@@ -2,8 +2,8 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Rice Red Bean</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Rice Red Bean - 제주 떡집 물류 권역 분류</title>
     
     <!-- PWA & Mobile App Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -25,20 +25,9 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <!-- SheetJS Style (xlsx-js-style) for Styled Excel Read/Write -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <!-- Firebase SDKs -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        window.firebaseModules = {
-            initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged,
-            getFirestore, doc, setDoc, getDoc, collection, onSnapshot, deleteDoc
-        };
-    </script>
+    <!-- Firebase Compat SDK (안정적인 단일 파일 연동 및 오프라인 캐시 지원) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
     <style>
         @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
@@ -50,58 +39,154 @@
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #d6cec2; border-radius: 2px; }
+        .safe-pb { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+        .safe-nav { padding-bottom: calc(0.5rem + env(safe-area-inset-bottom)); }
     </style>
 </head>
 <body class="text-stone-800 antialiased selection:bg-stone-200 selection:text-stone-900">
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
-        // 기본 마스터 데이터 초기화 (임의 데이터 완전 제거 — [하차지 목록]에서 명단 엑셀 업로드로만 관리)
-        const initialMasterData = {};
-        const LOCAL_MASTER_KEY = 'rice_red_bean_master_v2';
-        const LOCAL_HISTORY_KEY = 'rice_red_bean_history_v2';
+        // ==========================================
+        // 1. Firebase 실제 프로젝트 설정 (riceredbean-743a0)
+        // ==========================================
+        const FIREBASE_CONFIG = {
+            apiKey: "AIzaSyBj8x8nUPrTp9Y2fpaVT3zwFYpQ7XwPNyM",
+            authDomain: "riceredbean-743a0.firebaseapp.com",
+            projectId: "riceredbean-743a0",
+            storageBucket: "riceredbean-743a0.firebasestorage.app",
+            messagingSenderId: "116914812678",
+            appId: "1:116914812678:web:dd095d9a52d96d24ead087"
+        };
 
-        const Icon = ({ name, size = 18, className = "" }) => {
-            useEffect(() => {
-                if (window.lucide) window.lucide.createIcons();
-            });
-            return <i data-lucide={name} style={{ width: size, height: size }} className={`inline-block ${className}`}></i>;
+        const LOCAL_MASTER_KEY = 'rice_red_bean_master_v3';
+        const LOCAL_HISTORY_KEY = 'rice_red_bean_history_v3';
+        const LOCAL_AUTO_DL_KEY = 'rice_red_bean_auto_dl_v3';
+
+        // ==========================================
+        // 2. React 전용 순수 SVG 아이콘 (버그 3 해결: Lucide DOM 충돌 원천 차단)
+        // ==========================================
+        const ICON_PATHS = {
+            'upload-cloud': '<path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/>',
+            'check-square': '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+            'folder-clock': '<circle cx="16" cy="16" r="6"/><path d="M7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2"/><path d="M16 14v2l1 1"/>',
+            'pie-chart': '<path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>',
+            'map-pin': '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+            'download': '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+            'alert-triangle': '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+            'alert-circle': '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
+            'check-circle': '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+            'user-x': '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="22" y2="13"/><line x1="22" y1="8" x2="17" y2="13"/>',
+            'file-spreadsheet': '<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/>',
+            'rotate-ccw': '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+            'table': '<path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/>',
+            'list-checks': '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
+            'inbox': '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+            'trash-2': '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>',
+            'plus-circle': '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>',
+            'clipboard': '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>',
+            'zap': '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+            'search': '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+            'copy': '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+            'x': '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'
+        };
+
+        const Icon = ({ name, size = 18, className = "" }) => (
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width={size}
+                height={size}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={`inline-block shrink-0 ${className}`}
+                dangerouslySetInnerHTML={{ __html: ICON_PATHS[name] || '' }}
+            />
+        );
+
+        // 안전한 클립보드 복사 유틸리티
+        const copyTextSafe = async (text) => {
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(text);
+                    return true;
+                }
+            } catch (e) {}
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                return true;
+            } catch (e) {
+                return false;
+            }
         };
 
         function App() {
             const [activeTab, setActiveTab] = useState('upload');
-            const [user, setUser] = useState(null);
-            const [fbApi, setFbApi] = useState(null);
-            const [appId, setAppId] = useState('default-rice-app');
-            
+            const [dbStatus, setDbStatus] = useState('connecting'); // 'connected' | 'local' | 'quota'
+            const dbRef = useRef(null);
+
+            // 마스터 데이터 및 내역 (로컬 백업 즉시 로드 후 클라우드 동기화)
             const [masterData, setMasterData] = useState(() => {
                 try {
-                    const saved = localStorage.getItem(LOCAL_MASTER_KEY);
-                    return saved ? JSON.parse(saved) : initialMasterData;
-                } catch (e) {
-                    return initialMasterData;
-                }
+                    const saved = localStorage.getItem(LOCAL_MASTER_KEY) || localStorage.getItem('rice_red_bean_master_v2');
+                    return saved ? JSON.parse(saved) : {};
+                } catch (e) { return {}; }
             });
             const [history, setHistory] = useState(() => {
                 try {
-                    const saved = localStorage.getItem(LOCAL_HISTORY_KEY);
+                    const saved = localStorage.getItem(LOCAL_HISTORY_KEY) || localStorage.getItem('rice_red_bean_history_v2');
                     return saved ? JSON.parse(saved) : [];
-                } catch (e) {
-                    return [];
-                }
+                } catch (e) { return []; }
             });
+
             const [currentDoc, setCurrentDoc] = useState(null);
             const [selectedDeliveryDocId, setSelectedDeliveryDocId] = useState('');
             const [deliveryRegionFilter, setDeliveryRegionFilter] = useState('전체');
-            const [deliveryViewMode, setDeliveryViewMode] = useState('table'); // 'table' | 'checked_list'
-            
+            const [deliveryViewMode, setDeliveryViewMode] = useState('table');
+
+            // 딸깍 기능 상태: 품목 선택(쌀/팥), 자동 엑셀 다운로드, 붙여넣기 모달
+            const [selectedItemType, setSelectedItemType] = useState('쌀');
+            const [autoDownloadExcel, setAutoDownloadExcel] = useState(() => {
+                try { return localStorage.getItem(LOCAL_AUTO_DL_KEY) === 'true'; } catch (e) { return false; }
+            });
+            const [showPasteModal, setShowPasteModal] = useState(false);
+            const [pasteText, setPasteText] = useState('');
+
+            // 하차지 목록 검색 & 삭제 확인 모달 (confirm() 대체)
+            const [regionSearch, setRegionSearch] = useState('');
+            const [confirmDialog, setConfirmDialog] = useState(null);
+
             const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
             const [selectedMonth, setSelectedMonth] = useState('ALL');
             const [toast, setToast] = useState(null);
+            const toastTimerRef = useRef(null);
 
-            // 로컬 모드에서도 작업 내역 및 체크 기록 유지
+            // 개별 하차지 입력 폼 상태
+            const [newCompName, setNewCompName] = useState('');
+            const [newCompRep, setNewCompRep] = useState('');
+            const [newCompRegion, setNewCompRegion] = useState('제주시');
+            const [newCompAddress, setNewCompAddress] = useState('');
+            const [newCompPhone, setNewCompPhone] = useState('');
+
+            const showToast = (msg, type = 'info') => {
+                setToast({ msg, type });
+                if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+                toastTimerRef.current = setTimeout(() => setToast(null), 3500);
+            };
+
+            // 로컬 스토리지 동기화 유지
             useEffect(() => {
                 try { localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(history)); } catch (e) {}
                 if (history.length > 0 && !selectedDeliveryDocId) {
@@ -109,12 +194,108 @@
                 }
             }, [history]);
 
-            const showToast = (msg, type = 'info') => {
-                setToast({ msg, type });
-                setTimeout(() => setToast(null), 3500);
+            useEffect(() => {
+                try { localStorage.setItem(LOCAL_AUTO_DL_KEY, String(autoDownloadExcel)); } catch (e) {}
+            }, [autoDownloadExcel]);
+
+            // ==========================================
+            // 3. Firebase 초기화 및 초절약 동기화 (명단 1문서 통합 저장으로 쓰기 한도 99% 절약)
+            // ==========================================
+            useEffect(() => {
+                let unsubMaster = null;
+                let unsubHistory = null;
+
+                try {
+                    if (typeof firebase !== 'undefined') {
+                        if (!firebase.apps.length) {
+                            firebase.initializeApp(FIREBASE_CONFIG);
+                        }
+                        const firestore = firebase.firestore();
+                        firestore.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+                        dbRef.current = firestore;
+
+                        // [핵심 절약 구조] 떡집 명단 전체를 문서 딱 1개('rrb_master/all_shops')로 관리
+                        unsubMaster = firestore.collection('rrb_master').doc('all_shops').onSnapshot((docSnap) => {
+                            setDbStatus('connected');
+                            if (docSnap.exists) {
+                                const d = docSnap.data();
+                                if (d && d.shopsJson) {
+                                    try {
+                                        const parsed = JSON.parse(d.shopsJson);
+                                        setMasterData(parsed);
+                                        localStorage.setItem(LOCAL_MASTER_KEY, JSON.stringify(parsed));
+                                    } catch (e) {}
+                                }
+                            }
+                        }, (err) => {
+                            console.warn("Master sync warning:", err);
+                            setDbStatus(err.code === 'resource-exhausted' ? 'quota' : 'local');
+                        });
+
+                        // 작업 내역 실시간 동기화 ('rrb_history' 컬렉션)
+                        unsubHistory = firestore.collection('rrb_history').onSnapshot((snapshot) => {
+                            setDbStatus('connected');
+                            const loaded = [];
+                            snapshot.forEach(docSnap => {
+                                const d = docSnap.data();
+                                let parsedRows = [];
+                                try { parsedRows = JSON.parse(d.recordsJson || "[]"); } catch (e) {}
+                                loaded.push({
+                                    ...d,
+                                    id: docSnap.id,
+                                    data: parsedRows
+                                });
+                            });
+                            loaded.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                            setHistory(loaded);
+                            if (loaded.length > 0) {
+                                setSelectedDeliveryDocId(prev => prev || loaded[0].id);
+                            }
+                        }, (err) => {
+                            console.warn("History sync warning:", err);
+                            setDbStatus(err.code === 'resource-exhausted' ? 'quota' : 'local');
+                        });
+                    } else {
+                        setDbStatus('local');
+                    }
+                } catch (e) {
+                    console.error("Firebase init failed:", e);
+                    setDbStatus('local');
+                }
+
+                return () => {
+                    if (unsubMaster) unsubMaster();
+                    if (unsubHistory) unsubHistory();
+                };
+            }, []);
+
+            // 마스터 데이터 저장 (문서 1건에 일괄 저장 -> 쓰기 1회만 소모!)
+            const saveMasterToCloud = async (nextMaster) => {
+                setMasterData(nextMaster);
+                try { localStorage.setItem(LOCAL_MASTER_KEY, JSON.stringify(nextMaster)); } catch (e) {}
+
+                if (dbRef.current) {
+                    try {
+                        await dbRef.current.collection('rrb_master').doc('all_shops').set({
+                            shopsJson: JSON.stringify(nextMaster),
+                            count: Object.keys(nextMaster).length,
+                            updatedAt: Date.now()
+                        });
+                        setDbStatus('connected');
+                        return true;
+                    } catch (err) {
+                        console.error("Save master cloud error:", err);
+                        if (err.code === 'resource-exhausted') {
+                            setDbStatus('quota');
+                            showToast("오늘 파이어베이스 무료 쓰기 한도 초과로 로컬에만 임시 저장되었습니다.", "error");
+                        }
+                        return false;
+                    }
+                }
+                return false;
             };
 
-            // 내가 실제 하차한 포대 수 계산 (전체 체크 vs 절반/부분 체크 반영)
+            // 내가 실제 하차한 포대 수 계산
             const getEffectiveMySacks = (row) => {
                 if (!row || !row.completed) return 0;
                 if (row.mySacks !== undefined && row.mySacks !== null) {
@@ -123,7 +304,7 @@
                 return (Number(row.sacks) || 0) + (Number(row.usSacks) || 0);
             };
 
-            // 주소 문자열을 기반으로 제주 권역 자동 추론
+            // 주소 문자열 기반 제주 권역 자동 추론
             const inferRegionByAddress = (address = "") => {
                 const addr = String(address).trim();
                 if (!addr) return "미분류";
@@ -145,7 +326,9 @@
                 return "미분류";
             };
 
-            // 상호명이 다르게 적혀 있어도 대표자, 전화번호, 주소, 핵심 상호명으로 찾아내는 스마트 매칭 함수
+            // ==========================================
+            // 4. 스마트 매칭 함수 (버그 4 해결: 동명이인 대표자 오매칭 차단)
+            // ==========================================
             const findSmartMaster = (rawName, rawRep = "", rawPhone = "", rawAddr = "") => {
                 const cleanName = String(rawName || "").trim();
                 const noSpaceName = cleanName.replace(/\s+/g, "");
@@ -160,14 +343,14 @@
 
                 const coreTarget = stripSuffix(cleanName);
 
-                // 1단계: 정확히 일치하거나 공백 제거 시 상호 일치
+                // 1단계: 정확 일치 또는 공백 제거 일치
                 if (masterData[cleanName]) return { ...masterData[cleanName], name: cleanName };
                 const entries = Object.entries(masterData);
                 for (const [k, info] of entries) {
                     if (k.replace(/\s+/g, "") === noSpaceName) return { ...info, name: k };
                 }
 
-                // 2단계: 전화번호 일치 (뒤 8자리 기준)
+                // 2단계: 전화번호 뒤 8자리 일치
                 if (cleanPhone.length >= 8) {
                     const tail = cleanPhone.slice(-8);
                     for (const [k, info] of entries) {
@@ -178,7 +361,7 @@
                     }
                 }
 
-                // 3단계: 대표자명 + (핵심 상호명 또는 주소 일부) 일치
+                // 3단계: 대표자명 일치 (동명이인이 2곳 이상일 때는 상호나 주소가 겹칠 때만 매칭하고, 안 겹치면 오매칭 방지를 위해 건너뜀!)
                 if (cleanRep.length >= 2) {
                     const repMatches = entries.filter(([k, info]) => {
                         const mRep = String(info.rep || "").replace(/외\s*\d+명?|\s+/g, "").trim();
@@ -190,15 +373,15 @@
                     } else if (repMatches.length > 1) {
                         for (const [k, info] of repMatches) {
                             const cKey = stripSuffix(k);
-                            if (coreTarget && cKey && (cKey.includes(coreTarget) || coreTarget.includes(cKey))) {
+                            if (coreTarget.length >= 2 && cKey && (cKey.includes(coreTarget) || coreTarget.includes(cKey))) {
                                 return { ...info, name: k };
                             }
                             const mAddr = String(info.address || "").replace(/\s+/g, "");
-                            if (cleanAddr && mAddr && (mAddr.includes(cleanAddr) || cleanAddr.includes(mAddr))) {
+                            if (cleanAddr.length >= 4 && mAddr && (mAddr.includes(cleanAddr) || cleanAddr.includes(mAddr))) {
                                 return { ...info, name: k };
                             }
                         }
-                        return { ...repMatches[0][1], name: repMatches[0][0] };
+                        // [버그 4 해결] 동명이인인데 상호·주소 모두 불일치하면 엉뚱한 첫 번째 업체를 고르지 않고 다음 단계로 넘김
                     }
                 }
 
@@ -225,93 +408,9 @@
                 return null;
             };
 
-            useEffect(() => {
-                const initFirebase = async () => {
-                    const checkInterval = setInterval(async () => {
-                        if (window.firebaseModules) {
-                            clearInterval(checkInterval);
-                            const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, doc, setDoc, getDoc, collection, onSnapshot, deleteDoc } = window.firebaseModules;
-                            
-                            try {
-                                const configStr = typeof __firebase_config !== 'undefined' ? __firebase_config : null;
-                                const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-rice-app';
-                                setAppId(currentAppId);
-
-                                if (configStr) {
-                                    const firebaseConfig = JSON.parse(configStr);
-                                    const app = initializeApp(firebaseConfig);
-                                    const auth = getAuth(app);
-                                    const db = getFirestore(app);
-
-                                    setFbApi({ db, auth, doc, setDoc, getDoc, collection, onSnapshot, deleteDoc });
-
-                                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                                        await signInWithCustomToken(auth, __initial_auth_token);
-                                    } else {
-                                        await signInAnonymously(auth);
-                                    }
-
-                                    onAuthStateChanged(auth, (currentUser) => {
-                                        setUser(currentUser);
-                                    });
-                                }
-                            } catch (e) {
-                                console.error("Firebase Init Error:", e);
-                            }
-                        }
-                    }, 100);
-                };
-                initFirebase();
-            }, []);
-
-            useEffect(() => {
-                if (!user || !fbApi) return;
-                const { db, collection, onSnapshot } = fbApi;
-                
-                const regionsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'regions');
-                const unsubscribe = onSnapshot(regionsRef, (snapshot) => {
-                    const loaded = {};
-                    snapshot.forEach(docSnap => {
-                        const d = docSnap.data();
-                        if (d && d.name) {
-                            loaded[d.name] = {
-                                region: d.region || "미분류",
-                                rep: d.rep || "",
-                                address: d.address || "",
-                                phone: d.phone || ""
-                            };
-                        }
-                    });
-                    setMasterData(loaded);
-                    try { localStorage.setItem(LOCAL_MASTER_KEY, JSON.stringify(loaded)); } catch (e) {}
-                }, (error) => console.error("Regions sync error:", error));
-                return () => unsubscribe();
-            }, [user, fbApi]);
-
-            useEffect(() => {
-                if (!user || !fbApi) return;
-                const { db, collection, onSnapshot } = fbApi;
-
-                const historyRef = collection(db, 'artifacts', appId, 'users', user.uid, 'history');
-                const unsubscribe = onSnapshot(historyRef, (snapshot) => {
-                    const loadedHistory = [];
-                    snapshot.forEach(docSnap => {
-                        const data = docSnap.data();
-                        loadedHistory.push({
-                            ...data,
-                            id: docSnap.id,
-                            data: JSON.parse(data.recordsJson || "[]")
-                        });
-                    });
-                    loadedHistory.sort((a, b) => b.timestamp - a.timestamp);
-                    setHistory(loadedHistory);
-                    if (loadedHistory.length > 0 && !selectedDeliveryDocId) {
-                        setSelectedDeliveryDocId(loadedHistory[0].id);
-                    }
-                }, (error) => console.error("History sync error:", error));
-                return () => unsubscribe();
-            }, [user, fbApi]);
-
+            // ==========================================
+            // 5. 엑셀 파일 업로드 처리
+            // ==========================================
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -322,27 +421,25 @@
                 const korMatch = file.name.match(/(?:20)?(\d{2})년\s*(\d{1,2})월/);
                 const hyphenMatch = file.name.match(/(20\d{2})[-._]?(\d{1,2})/);
                 const shortMatch = file.name.match(/(\d{2})[-._](\d{1,2})/);
+                const yymmddMatch = file.name.match(/_(\d{2})(\d{2})\d{2}/);
 
-                if (korMatch) {
-                    year = "20" + korMatch[1];
-                    month = korMatch[2].padStart(2, '0');
-                } else if (hyphenMatch) {
-                    year = hyphenMatch[1];
-                    month = hyphenMatch[2].padStart(2, '0');
-                } else if (shortMatch) {
-                    year = "20" + shortMatch[1];
-                    month = shortMatch[2].padStart(2, '0');
-                }
+                if (korMatch) { year = "20" + korMatch[1]; month = korMatch[2].padStart(2, '0'); }
+                else if (hyphenMatch) { year = hyphenMatch[1]; month = hyphenMatch[2].padStart(2, '0'); }
+                else if (shortMatch) { year = "20" + shortMatch[1]; month = shortMatch[2].padStart(2, '0'); }
+                else if (yymmddMatch) { year = "20" + yymmddMatch[1]; month = yymmddMatch[2].padStart(2, '0'); }
+
+                // 파일명에 팥/쌀 키워드가 있으면 자동 품목 전환
+                const detectedType = file.name.includes("팥") ? "팥" : (file.name.includes("쌀") ? "쌀" : selectedItemType);
+                setSelectedItemType(detectedType);
 
                 const reader = new FileReader();
                 reader.onload = async (evt) => {
                     try {
                         const buffer = new Uint8Array(evt.target.result);
                         const wb = XLSX.read(buffer, { type: 'array' });
-                        const wsname = wb.SheetNames[0];
-                        const ws = wb.Sheets[wsname];
+                        const ws = wb.Sheets[wb.SheetNames[0]];
                         const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
-                        await processExcelData(data, file.name, `${year}-${month}`);
+                        await processRowsData(data, file.name, `${year}-${month}`, detectedType);
                     } catch (err) {
                         console.error(err);
                         showToast("파일 처리 중 오류가 발생했습니다.", "error");
@@ -352,48 +449,173 @@
                 e.target.value = null; 
             };
 
-            const processExcelData = async (rows, fileName, yearMonth) => {
+            // ==========================================
+            // 6. [신규 딸깍 핵심] 제미나이 텍스트(JSON / 마크다운 표 / CSV·탭) 바로 파싱!
+            // ==========================================
+            const copyGeminiFaxPrompt = async () => {
+                const promptText = `팩스 공급내역서 사진을 읽어서 아래 JSON 배열 형식으로만 정확히 추출해줘 (설명 없이 JSON만 출력, 수량이 0인 업체는 제외):
+[
+  {
+    "no": 1,
+    "name": "상호명",
+    "rep": "대표자명",
+    "sacks": 10,
+    "usSacks": 0
+  }
+]`;
+                const ok = await copyTextSafe(promptText);
+                if (ok) showToast("🤖 제미나이 팩스 추출 명령어 복사 완료!", "success");
+            };
+
+            const handleClipboardQuickPaste = async () => {
+                try {
+                    const txt = await navigator.clipboard.readText();
+                    if (txt && txt.trim()) {
+                        setPasteText(txt);
+                        showToast("📋 클립보드 내용을 불러왔습니다!", "success");
+                    } else {
+                        showToast("클립보드가 비어 있습니다.", "error");
+                    }
+                } catch (e) {
+                    showToast("입력 칸을 길게 눌러 직접 붙여넣기 해주세요.", "info");
+                }
+            };
+
+            const handleProcessPastedText = async () => {
+                let raw = pasteText.trim();
+                if (!raw) {
+                    showToast("제미나이가 뽑아준 내용을 먼저 붙여넣어 주세요.", "error");
+                    return;
+                }
+
+                // 마크다운 코드블록(```json ... ```) 제거
+                raw = raw.replace(/^```(?:json|csv|tsv|text)?\s*/i, '').replace(/\s*```$/, '').trim();
+
+                const now = new Date();
+                const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                const mmdd = `${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+                const fileName = `${selectedItemType}_제미나이직접입력_${mmdd}`;
+
+                let rows2D = [];
+
+                // Case A: JSON 배열 형태인 경우
+                if (raw.startsWith('[') || raw.startsWith('{')) {
+                    try {
+                        let parsed = JSON.parse(raw);
+                        if (!Array.isArray(parsed) && parsed.items) parsed = parsed.items;
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            rows2D.push(["번호", "상호", "대표자", "주소", "전화번호", "국산(포)", "미국산(포)"]);
+                            parsed.forEach((item, idx) => {
+                                rows2D.push([
+                                    item.no || (idx + 1),
+                                    item.name || item.상호 || item.업체명 || "",
+                                    item.rep || item.대표자 || item.성명 || "",
+                                    item.address || item.주소 || "",
+                                    item.phone || item.전화번호 || "",
+                                    item.sacks ?? item.국산 ?? item.수량 ?? item.포 ?? 0,
+                                    item.usSacks ?? item.미국산 ?? item.수입 ?? 0
+                                ]);
+                            });
+                        }
+                    } catch (e) {
+                        showToast("JSON 형식이 깨져 있습니다. 대괄호 [ ]를 확인해 주세요.", "error");
+                        return;
+                    }
+                } else {
+                    // Case B: 마크다운 표(| 상호 | 수량 |) 또는 탭/쉼표 구분 텍스트
+                    const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                    for (const line of lines) {
+                        if (/^[\|\-\s:]+$/.test(line)) continue; // 마크다운 구분선(|---|---|) 스킵
+                        let cols = [];
+                        if (line.includes('|')) {
+                            cols = line.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+                        } else if (line.includes('\t')) {
+                            cols = line.split('\t').map(c => c.trim());
+                        } else {
+                            cols = line.split(',').map(c => c.trim());
+                        }
+                        if (cols.length >= 2) rows2D.push(cols);
+                    }
+                    // 헤더가 없으면 자동 헤더 추론 (2열: 상호, 수량 / 3열: 번호, 상호, 수량 또는 상호, 대표, 수량)
+                    const firstRowStr = (rows2D[0] || []).join(' ');
+                    if (rows2D.length > 0 && !firstRowStr.includes('상호') && !firstRowStr.includes('업체')) {
+                        const colCnt = rows2D[0].length;
+                        if (colCnt === 2) rows2D.unshift(["상호", "국산(포)"]);
+                        else if (colCnt === 3) rows2D.unshift(["상호", "대표자", "국산(포)"]);
+                        else rows2D.unshift(["번호", "상호", "대표자", "국산(포)", "미국산(포)"]);
+                    }
+                }
+
+                if (rows2D.length < 2) {
+                    showToast("읽을 수 있는 업체 내역이 없습니다.", "error");
+                    return;
+                }
+
+                setShowPasteModal(false);
+                setPasteText('');
+                await processRowsData(rows2D, fileName, ym, selectedItemType);
+            };
+
+            // ==========================================
+            // 7. 공통 데이터 분류 엔진 (버그 1 & 버그 2 완벽 해결)
+            // ==========================================
+            const processRowsData = async (rows, fileName, yearMonth, itemType = '쌀') => {
                 if (Object.keys(masterData).length === 0) {
-                    showToast("등록된 떡집 명단이 0곳입니다. 먼저 [하차지 목록]에서 떡집명단 엑셀을 올려주세요!", "error");
+                    showToast("등록된 떡집 명단이 0곳입니다. [하차지 목록]에서 명단 엑셀을 먼저 올려주세요!", "error");
                 }
 
                 let headerRowIdx = -1;
                 let colMap = {};
 
-                for (let i = 0; i < Math.min(rows.length, 20); i++) {
+                for (let i = 0; i < Math.min(rows.length, 25); i++) {
                     const row = rows[i];
                     if (!row || !Array.isArray(row)) continue;
                     const rowStr = row.join(" ");
-                    if (rowStr.includes("상호") && (rowStr.includes("포") || rowStr.includes("수량") || rowStr.includes("국산") || rowStr.includes("25kg") || rowStr.includes("20kg"))) {
+                    if ((rowStr.includes("상호") || rowStr.includes("업체명")) && (rowStr.includes("포") || rowStr.includes("수량") || rowStr.includes("국산") || rowStr.includes("미국산") || rowStr.includes("25kg") || rowStr.includes("20kg"))) {
                         headerRowIdx = i;
+                        let fallbackKrIdx = undefined;
+                        let fallbackUsIdx = undefined;
+
                         row.forEach((cell, idx) => {
-                            if (cell !== null && cell !== undefined) {
-                                const cleanCell = String(cell).replace(/\s+/g, "");
-                                const lowerCell = cleanCell.toLowerCase();
-                                if (cleanCell.includes("번호") && !cleanCell.includes("코드") && !cleanCell.includes("전화")) colMap.no = idx;
-                                else if (cleanCell.includes("상호") || cleanCell.includes("업체명")) colMap.name = idx;
-                                else if (cleanCell.includes("대표") || cleanCell.includes("성명")) colMap.rep = idx;
-                                else if (cleanCell.includes("주소") || cleanCell.includes("소재지")) colMap.address = idx;
-                                else if (cleanCell.includes("전화") || cleanCell.includes("연락처")) colMap.phone = idx;
-                                else if ((cleanCell.includes("국산") && !lowerCell.includes("kg")) || (cleanCell.includes("포") && !cleanCell.includes("미국")) || lowerCell.includes("20kg(포)") || lowerCell.includes("25kg(포)")) {
-                                    if (colMap.sack === undefined) colMap.sack = idx;
-                                }
-                                else if ((cleanCell.includes("미국산") || cleanCell.includes("외국산") || cleanCell.includes("수입")) && !lowerCell.includes("kg")) {
+                            if (cell === null || cell === undefined) return;
+                            const cleanCell = String(cell).replace(/\s+/g, "");
+                            const lowerCell = cleanCell.toLowerCase();
+
+                            if (cleanCell.includes("번호") && !cleanCell.includes("코드") && !cleanCell.includes("전화")) colMap.no = idx;
+                            else if (cleanCell.includes("상호") || cleanCell.includes("업체명")) colMap.name = idx;
+                            else if (cleanCell.includes("대표") || cleanCell.includes("성명")) colMap.rep = idx;
+                            else if (cleanCell.includes("주소") || cleanCell.includes("소재지")) colMap.address = idx;
+                            else if (cleanCell.includes("전화") || cleanCell.includes("연락처")) colMap.phone = idx;
+                            else if (cleanCell.includes("미국산") || cleanCell.includes("외국산") || cleanCell.includes("수입")) {
+                                // [버그 2 해결] '포'가 포함된 미국산 열을 최우선으로 잡고, '20kg' 등이 섞인 열도 fallback으로 확실히 인식
+                                if (cleanCell.includes("포") || cleanCell.includes("수량")) {
                                     if (colMap.usSack === undefined) colMap.usSack = idx;
+                                } else if (fallbackUsIdx === undefined) {
+                                    fallbackUsIdx = idx;
+                                }
+                            } else if (cleanCell.includes("국산") || cleanCell.includes("포") || cleanCell.includes("수량") || lowerCell.includes("20kg") || lowerCell.includes("25kg")) {
+                                if (cleanCell.includes("포") || cleanCell.includes("수량")) {
+                                    if (colMap.sack === undefined) colMap.sack = idx;
+                                } else if (fallbackKrIdx === undefined) {
+                                    fallbackKrIdx = idx;
                                 }
                             }
                         });
+
+                        if (colMap.sack === undefined && fallbackKrIdx !== undefined) colMap.sack = fallbackKrIdx;
+                        if (colMap.usSack === undefined && fallbackUsIdx !== undefined) colMap.usSack = fallbackUsIdx;
                         break;
                     }
                 }
 
                 if (headerRowIdx === -1 || colMap.name === undefined) {
-                    showToast("엑셀에서 '상호'나 '수량(포)' 열을 찾을 수 없습니다.", "error");
+                    showToast("데이터에서 '상호'나 '수량(포)' 열을 찾을 수 없습니다.", "error");
                     return;
                 }
 
                 const parsedList = [];
-                let totalSacks = 0;
+                let totalKrSacks = 0;
+                let totalUsSacks = 0;
                 let unclassifiedCount = 0;
                 const unregisteredList = [];
                 const typoList = [];
@@ -425,25 +647,17 @@
                     const master = findSmartMaster(cleanName, rep, rowPhone, rowAddr);
 
                     const unifiedName = (master && master.name) ? master.name : cleanName;
-                    let address = (master && master.address) ? master.address : rowAddr;
-                    let phone = (master && master.phone) ? master.phone : rowPhone;
-                    let region = (master && master.region && master.region !== "미분류")
+                    const address = (master && master.address) ? master.address : rowAddr;
+                    const phone = (master && master.phone) ? master.phone : rowPhone;
+                    const region = (master && master.region && master.region !== "미분류")
                         ? master.region
                         : inferRegionByAddress(address);
 
-                    if (region === "미분류") {
-                        unclassifiedCount++;
-                    }
+                    if (region === "미분류") unclassifiedCount++;
 
-                    // 미등록 업체 및 오타·표기 불일치 검증
                     if (!master) {
                         unregisteredList.push({
-                            no: origNo,
-                            name: cleanName,
-                            rep: rep,
-                            phone: rowPhone,
-                            address: rowAddr,
-                            sacks: sacks + usSacks
+                            no: origNo, name: cleanName, rep, phone: rowPhone, address: rowAddr, sacks: sacks + usSacks
                         });
                     } else {
                         const normFileName = cleanName.replace(/\s+/g, "");
@@ -455,31 +669,27 @@
 
                         if (nameDiff || repDiff) {
                             typoList.push({
-                                no: origNo,
-                                fileName: cleanName,
-                                masterName: master.name,
-                                fileRep: rep,
-                                masterRep: master.rep || "",
-                                nameDiff,
-                                repDiff
+                                no: origNo, fileName: cleanName, masterName: master.name,
+                                fileRep: rep, masterRep: master.rep || "", nameDiff, repDiff
                             });
                         }
                     }
 
-                    totalSacks += sacks;
+                    // [버그 1 해결] 국산과 미국산 포대를 모두 정확히 누적
+                    totalKrSacks += sacks;
+                    totalUsSacks += usSacks;
 
                     parsedList.push({
                         no: origNo,
                         name: unifiedName,
                         rep: rep || (master && master.rep ? master.rep : ""),
-                        region: region,
-                        address: address,
-                        phone: phone,
-                        sacks: sacks,
-                        usSacks: usSacks,
+                        region,
+                        address,
+                        phone,
+                        sacks,
+                        usSacks,
                         completed: false,
-                        mySacks: null,
-                        originalRow: row
+                        mySacks: null
                     });
                 }
 
@@ -488,14 +698,18 @@
                     return;
                 }
 
+                const totalSacks = totalKrSacks + totalUsSacks;
                 const docId = `doc_${Date.now()}`;
                 const newDoc = {
                     id: docId,
                     fileName,
+                    itemType,
                     yearMonth,
                     uploadDate: new Date().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
                     timestamp: Date.now(),
                     totalSacks,
+                    totalKrSacks,
+                    totalUsSacks,
                     unclassifiedCount,
                     unregisteredList,
                     typoList,
@@ -506,53 +720,50 @@
                 setSelectedDeliveryDocId(docId);
 
                 const alertSuffix = (unregisteredList.length > 0 || typoList.length > 0)
-                    ? ` (미등록 ${unregisteredList.length}·오타/확인 ${typoList.length})`
+                    ? ` (미등록 ${unregisteredList.length}·확인 ${typoList.length})`
                     : "";
 
-                if (user && fbApi) {
+                // 클라우드 저장 (문서 1회 쓰기만 발생)
+                if (dbRef.current) {
                     try {
-                        const { db, doc, setDoc } = fbApi;
-                        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', docId);
-                        await setDoc(docRef, {
+                        await dbRef.current.collection('rrb_history').doc(docId).set({
                             fileName: newDoc.fileName,
+                            itemType: newDoc.itemType,
                             yearMonth: newDoc.yearMonth,
                             uploadDate: newDoc.uploadDate,
                             timestamp: newDoc.timestamp,
                             totalSacks: newDoc.totalSacks,
+                            totalKrSacks: newDoc.totalKrSacks,
+                            totalUsSacks: newDoc.totalUsSacks,
                             unclassifiedCount: newDoc.unclassifiedCount,
                             unregisteredList: newDoc.unregisteredList,
                             typoList: newDoc.typoList,
                             recordsJson: JSON.stringify(newDoc.data)
                         });
-                        showToast(`분류 및 저장 완료! (총 ${totalSacks}포)${alertSuffix}`, (unregisteredList.length > 0 || typoList.length > 0) ? "error" : "success");
+                        showToast(`분류 및 클라우드 저장 완료! (총 ${totalSacks}포)${alertSuffix}`, (unregisteredList.length > 0 || typoList.length > 0) ? "error" : "success");
                     } catch (e) {
-                        console.error("Save history error", e);
-                        showToast("클라우드 저장 실패 (임시 상태로만 열람 가능)", "error");
+                        console.error("Save history error:", e);
+                        setHistory(prev => [newDoc, ...prev]);
+                        showToast(`분류 완료 (로컬 임시저장 · 총 ${totalSacks}포)${alertSuffix}`, "info");
                     }
                 } else {
                     setHistory(prev => [newDoc, ...prev]);
                     showToast(`분류 완료! (총 ${totalSacks}포)${alertSuffix}`, (unregisteredList.length > 0 || typoList.length > 0) ? "error" : "success");
                 }
-            };
-            const persistDocUpdate = async (updatedDoc) => {
-                if (currentDoc && currentDoc.id === updatedDoc.id) {
-                    setCurrentDoc(updatedDoc);
+
+                // [딸깍 핵심] 자동 다운로드 스위치가 켜져 있으면 즉시 엑셀 다운로드 실행!
+                if (autoDownloadExcel) {
+                    setTimeout(() => exportToExcel(newDoc, itemType), 250);
                 }
+            };
+
+            const persistDocUpdate = async (updatedDoc) => {
+                if (currentDoc && currentDoc.id === updatedDoc.id) setCurrentDoc(updatedDoc);
                 setHistory(prev => prev.map(h => h.id === updatedDoc.id ? updatedDoc : h));
 
-                if (user && fbApi) {
+                if (dbRef.current) {
                     try {
-                        const { db, doc, setDoc } = fbApi;
-                        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', updatedDoc.id);
-                        await setDoc(docRef, {
-                            fileName: updatedDoc.fileName,
-                            yearMonth: updatedDoc.yearMonth,
-                            uploadDate: updatedDoc.uploadDate,
-                            timestamp: updatedDoc.timestamp,
-                            totalSacks: updatedDoc.totalSacks,
-                            unclassifiedCount: updatedDoc.unclassifiedCount,
-                            unregisteredList: updatedDoc.unregisteredList || [],
-                            typoList: updatedDoc.typoList || [],
+                        await dbRef.current.collection('rrb_history').doc(updatedDoc.id).update({
                             recordsJson: JSON.stringify(updatedDoc.data)
                         });
                     } catch (e) {
@@ -563,25 +774,19 @@
 
             const toggleDeliveryComplete = async (docObj, rowIndex) => {
                 if (!docObj) return;
-                const updatedData = docObj.data.map((item, idx) => {
-                    if (idx === rowIndex) {
-                        return { ...item, completed: !item.completed, mySacks: null };
-                    }
-                    return item;
-                });
+                const updatedData = docObj.data.map((item, idx) =>
+                    idx === rowIndex ? { ...item, completed: !item.completed, mySacks: null } : item
+                );
                 await persistDocUpdate({ ...docObj, data: updatedData });
             };
 
-            // 절반 체크 토글 (두 대 차량이 나눠 하차하는 경우)
             const toggleHalfDelivery = async (docObj, rowIndex) => {
                 if (!docObj) return;
                 const updatedData = docObj.data.map((item, idx) => {
                     if (idx === rowIndex) {
                         const total = (Number(item.sacks) || 0) + (Number(item.usSacks) || 0);
                         const isCurrentlySplit = Boolean(item.completed && item.mySacks !== undefined && item.mySacks !== null && Number(item.mySacks) < total);
-                        if (isCurrentlySplit) {
-                            return { ...item, completed: true, mySacks: null };
-                        }
+                        if (isCurrentlySplit) return { ...item, completed: true, mySacks: null };
                         const halfVal = total >= 2 ? Math.floor(total / 2) : total;
                         return { ...item, completed: true, mySacks: halfVal };
                     }
@@ -590,7 +795,6 @@
                 await persistDocUpdate({ ...docObj, data: updatedData });
             };
 
-            // 분할 하차 수량 미세 조정 (+1 / -1 포)
             const adjustMySacks = async (docObj, rowIndex, delta) => {
                 if (!docObj) return;
                 const updatedData = docObj.data.map((item, idx) => {
@@ -608,21 +812,15 @@
             const setBulkDeliveryComplete = async (docObj, targetIndices, status) => {
                 if (!docObj || !targetIndices || targetIndices.length === 0) return;
                 const idxSet = new Set(targetIndices);
-                const updatedData = docObj.data.map((item, idx) => {
-                    if (idxSet.has(idx)) {
-                        return { ...item, completed: status, mySacks: null };
-                    }
-                    return item;
-                });
+                const updatedData = docObj.data.map((item, idx) =>
+                    idxSet.has(idx) ? { ...item, completed: status, mySacks: null } : item
+                );
                 await persistDocUpdate({ ...docObj, data: updatedData });
                 showToast(status ? `${targetIndices.length}곳 일괄 체크 완료!` : `${targetIndices.length}곳 체크 해지 완료!`, "success");
             };
 
-            const deleteHistoryDoc = async (docId, e) => {
-                if (e) e.stopPropagation();
-                if (currentDoc && currentDoc.id === docId) {
-                    setCurrentDoc(null);
-                }
+            const deleteHistoryDoc = async (docId) => {
+                if (currentDoc && currentDoc.id === docId) setCurrentDoc(null);
                 setHistory(prev => {
                     const next = prev.filter(h => h.id !== docId);
                     if (selectedDeliveryDocId === docId) {
@@ -631,40 +829,82 @@
                     return next;
                 });
 
-                if (user && fbApi) {
+                if (dbRef.current) {
                     try {
-                        const { db, doc, deleteDoc } = fbApi;
-                        await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'history', docId));
-                        showToast("내역이 삭제되었습니다.", "success");
+                        await dbRef.current.collection('rrb_history').doc(docId).delete();
+                        showToast("클라우드 내역이 삭제되었습니다.", "success");
                     } catch (err) {
-                        console.error("Delete history error:", err);
-                        showToast("삭제 중 오류가 발생했습니다.", "error");
+                        showToast("로컬 내역에서 삭제되었습니다.", "info");
                     }
                 } else {
                     showToast("내역이 삭제되었습니다.", "success");
                 }
             };
 
-            const exportToExcel = (docToExport) => {
+            // ==========================================
+            // 8. 권역별 카톡 텍스트 원터치 복사 (신규 기능)
+            // ==========================================
+            const copyRegionKakaoText = async (docObj, regionsList, titleLabel) => {
+                if (!docObj || !docObj.data) return;
+                const itemLabel = docObj.itemType || (docObj.fileName && docObj.fileName.includes("팥") ? "팥" : selectedItemType);
+
+                const resolved = docObj.data.map(item => {
+                    const m = findSmartMaster(item.name, item.rep, item.phone, item.address) || {};
+                    const addr = m.address || item.address || "";
+                    const reg = (m.region && m.region !== "미분류") ? m.region : (item.region && item.region !== "미분류" ? item.region : inferRegionByAddress(addr));
+                    return {
+                        name: m.name || item.name,
+                        address: addr,
+                        phone: m.phone || item.phone || "",
+                        region: reg,
+                        sacks: Number(item.sacks) || 0,
+                        usSacks: Number(item.usSacks) || 0
+                    };
+                });
+
+                const lines = [`[${itemLabel} 배차 - ${titleLabel}]`];
+                let grandTotal = 0;
+
+                regionsList.forEach(regName => {
+                    const list = resolved.filter(r => r.region === regName);
+                    if (list.length === 0) return;
+                    let subSum = 0;
+                    lines.push(`\n■ ${regName} (${list.length}곳)`);
+                    list.forEach((it, idx) => {
+                        const tot = it.sacks + it.usSacks;
+                        subSum += tot;
+                        grandTotal += tot;
+                        const detail = it.usSacks > 0 ? `(국${it.sacks}/미${it.usSacks})` : '';
+                        lines.push(`${idx + 1}. ${it.name} : ${tot}포${detail}${it.address ? ` / ${it.address}` : ''}`);
+                    });
+                    lines.push(`▶ ${regName} 소계: ${subSum}포`);
+                });
+
+                if (grandTotal === 0) {
+                    showToast(`${titleLabel}에 배정된 물량이 없습니다.`, "error");
+                    return;
+                }
+
+                lines.push(`\n총 합계: ${grandTotal}포`);
+                const ok = await copyTextSafe(lines.join('\n'));
+                if (ok) showToast(`📲 [${titleLabel}] 카톡 명단 복사 완료! (${grandTotal}포)`, "success");
+            };
+
+            // ==========================================
+            // 9. 스타일 적용 엑셀 다운로드 (버그 6 해결: 쌀/팥 정확 반영)
+            // ==========================================
+            const exportToExcel = (docToExport, overrideItemType = null) => {
                 if (!docToExport || !docToExport.data) return;
 
                 const recoveredData = [];
                 docToExport.data.forEach((item, idx) => {
-                    const r = item.originalRow || [];
-                    const origNo = item.no !== undefined ? item.no : (r[0] !== undefined ? r[0] : (idx + 1));
+                    const origNo = item.no !== undefined ? item.no : (idx + 1);
                     const sacks = Number(item.sacks) || 0;
                     const usSacks = Number(item.usSacks) || 0;
 
-                    let phoneFromRow = "";
-                    if (Array.isArray(r)) {
-                        r.forEach(cell => {
-                            if (cell && String(cell).includes("010-")) phoneFromRow = String(cell).trim();
-                        });
-                    }
-
                     if (sacks > 0 || usSacks > 0) {
                         const cleanName = String(item.name).trim();
-                        const master = findSmartMaster(cleanName, item.rep, item.phone || phoneFromRow, item.address) || {};
+                        const master = findSmartMaster(cleanName, item.rep, item.phone, item.address) || {};
                         const resolvedName = master.name || cleanName;
                         const resolvedAddress = master.address || item.address || "";
                         const resolvedRegion = (master.region && master.region !== "미분류")
@@ -677,8 +917,8 @@
                             rep: item.rep || master.rep || "",
                             region: resolvedRegion,
                             address: resolvedAddress,
-                            phone: master.phone || item.phone || phoneFromRow || "",
-                            sacks: sacks,
+                            phone: master.phone || item.phone || "",
+                            sacks,
                             usSacks: usSacks > 0 ? usSacks : ""
                         });
                     }
@@ -690,8 +930,7 @@
                 }
 
                 const wb = XLSX.utils.book_new();
-                const isBean = docToExport.fileName && docToExport.fileName.includes("팥");
-                const itemLabel = isBean ? "팥" : "쌀";
+                const itemLabel = overrideItemType || docToExport.itemType || (docToExport.fileName && docToExport.fileName.includes("팥") ? "팥" : selectedItemType);
 
                 const borderThin = {
                     top: { style: "thin", color: { rgb: "D9D9D9" } },
@@ -699,7 +938,6 @@
                     left: { style: "thin", color: { rgb: "D9D9D9" } },
                     right: { style: "thin", color: { rgb: "D9D9D9" } }
                 };
-
                 const borderSummary = {
                     top: { style: "thin", color: { rgb: "000000" } },
                     bottom: { style: "double", color: { rgb: "000000" } },
@@ -707,7 +945,6 @@
                     right: { style: "thin", color: { rgb: "D9D9D9" } }
                 };
 
-                // 권역 그룹별 시트 생성 공통 함수
                 const buildRegionSheet = (regionsList) => {
                     const sData = [];
                     const sMerges = [];
@@ -718,41 +955,28 @@
                         const items = recoveredData.filter(d => d.region === regionName);
                         if (items.length === 0) return;
 
-                        // 1. 권역 타이틀 바
                         sData.push([regionName, "", "", "", "", ""]);
                         sMerges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 5 } });
                         sRowTypes.push({ type: 'banner' });
                         currentRow++;
 
-                        // 2. 컬럼 헤더
                         sData.push(["상호", "대표자", "주소", "전화번호", "국산(포)", "미국산(포)"]);
                         sRowTypes.push({ type: 'header' });
                         currentRow++;
 
-                        // 3. 업체 목록
-                        let sumKr = 0;
-                        let sumUs = 0;
+                        let sumKr = 0, sumUs = 0;
                         items.forEach(item => {
                             sumKr += (Number(item.sacks) || 0);
                             sumUs += (Number(item.usSacks) || 0);
-                            sData.push([
-                                item.name,
-                                item.rep,
-                                item.address,
-                                item.phone,
-                                item.sacks,
-                                item.usSacks
-                            ]);
+                            sData.push([item.name, item.rep, item.address, item.phone, item.sacks, item.usSacks]);
                             sRowTypes.push({ type: 'data' });
                             currentRow++;
                         });
 
-                        // 4. 권역 합계 행
                         sData.push(["", "", "", "합계", sumKr, sumUs]);
                         sRowTypes.push({ type: 'sum' });
                         currentRow++;
 
-                        // 5. 빈 줄
                         sData.push(["", "", "", "", "", ""]);
                         sRowTypes.push({ type: 'blank' });
                         currentRow++;
@@ -766,14 +990,7 @@
 
                     const ws = XLSX.utils.aoa_to_sheet(sData);
                     ws['!merges'] = sMerges;
-                    ws['!cols'] = [
-                        { wch: 24 }, // 상호
-                        { wch: 12 }, // 대표자
-                        { wch: 42 }, // 주소
-                        { wch: 16 }, // 전화번호
-                        { wch: 11 }, // 국산(포)
-                        { wch: 11 }  // 미국산(포)
-                    ];
+                    ws['!cols'] = [{ wch: 24 }, { wch: 12 }, { wch: 42 }, { wch: 16 }, { wch: 11 }, { wch: 11 }];
 
                     const range = XLSX.utils.decode_range(ws['!ref']);
                     for (let R = range.s.r; R <= range.e.r; ++R) {
@@ -799,16 +1016,8 @@
                             } else if (rowInfo.type === 'data') {
                                 const isSackCol = (C === 4 || C === 5);
                                 ws[addr].s = {
-                                    font: {
-                                        name: "맑은 고딕",
-                                        sz: 11,
-                                        bold: isSackCol,
-                                        color: { rgb: isSackCol ? "C00000" : "000000" }
-                                    },
-                                    alignment: {
-                                        horizontal: C === 2 ? "left" : "center",
-                                        vertical: "center"
-                                    },
+                                    font: { name: "맑은 고딕", sz: 11, bold: isSackCol, color: { rgb: isSackCol ? "C00000" : "000000" } },
+                                    alignment: { horizontal: C === 2 ? "left" : "center", vertical: "center" },
                                     border: borderThin
                                 };
                             } else if (rowInfo.type === 'sum') {
@@ -824,55 +1033,22 @@
                     return ws;
                 };
 
-                // ==========================================
-                // 시트 1: 제주시 · 신제주
-                // ==========================================
-                const ws1 = buildRegionSheet(['제주시', '신제주']);
-                XLSX.utils.book_append_sheet(wb, ws1, "제주시·신제주");
+                XLSX.utils.book_append_sheet(wb, buildRegionSheet(['제주시', '신제주']), "제주시·신제주");
+                XLSX.utils.book_append_sheet(wb, buildRegionSheet(['서쪽', '동쪽', '서귀포', '미분류']), "서쪽·동쪽·서귀포");
 
-                // ==========================================
-                // 시트 2: 서쪽 · 동쪽 · 서귀포 (미분류 포함)
-                // ==========================================
-                const ws2 = buildRegionSheet(['서쪽', '동쪽', '서귀포', '미분류']);
-                XLSX.utils.book_append_sheet(wb, ws2, "서쪽·동쪽·서귀포");
-
-                // ==========================================
-                // 시트 3: 원본 내역 (A열: 지역, B열: 번호, C열: 상호 순)
-                // ==========================================
-                const s3Data = [
-                    ["지역", "번호", "상호", "대표자", "주소", "전화번호", "국산(포)", "미국산(포)"]
-                ];
-                let totalKrAll = 0;
-                let totalUsAll = 0;
+                // 시트 3: 원본 내역
+                const s3Data = [["지역", "번호", "상호", "대표자", "주소", "전화번호", "국산(포)", "미국산(포)"]];
+                let totalKrAll = 0, totalUsAll = 0;
 
                 recoveredData.forEach(item => {
                     totalKrAll += (Number(item.sacks) || 0);
                     totalUsAll += (Number(item.usSacks) || 0);
-                    s3Data.push([
-                        item.region,
-                        item.no,
-                        item.name,
-                        item.rep,
-                        item.address,
-                        item.phone,
-                        item.sacks,
-                        item.usSacks
-                    ]);
+                    s3Data.push([item.region, item.no, item.name, item.rep, item.address, item.phone, item.sacks, item.usSacks]);
                 });
-
                 s3Data.push(["", "", "", "", "", "총합계", totalKrAll, totalUsAll > 0 ? totalUsAll : 0]);
 
                 const ws3 = XLSX.utils.aoa_to_sheet(s3Data);
-                ws3['!cols'] = [
-                    { wch: 10 }, // A: 지역
-                    { wch: 8 },  // B: 번호
-                    { wch: 24 }, // C: 상호
-                    { wch: 12 }, // D: 대표자
-                    { wch: 42 }, // E: 주소
-                    { wch: 16 }, // F: 전화번호
-                    { wch: 11 }, // G: 국산(포)
-                    { wch: 11 }  // H: 미국산(포)
-                ];
+                ws3['!cols'] = [{ wch: 10 }, { wch: 8 }, { wch: 24 }, { wch: 12 }, { wch: 42 }, { wch: 16 }, { wch: 11 }, { wch: 11 }];
 
                 const range3 = XLSX.utils.decode_range(ws3['!ref']);
                 const lastRow3 = range3.e.r;
@@ -898,16 +1074,8 @@
                         } else {
                             const isSackCol = (C === 6 || C === 7);
                             ws3[addr].s = {
-                                font: {
-                                    name: "맑은 고딕",
-                                    sz: 11,
-                                    bold: isSackCol,
-                                    color: { rgb: isSackCol ? "C00000" : "000000" }
-                                },
-                                alignment: {
-                                    horizontal: C === 4 ? "left" : "center",
-                                    vertical: "center"
-                                },
+                                font: { name: "맑은 고딕", sz: 11, bold: isSackCol, color: { rgb: isSackCol ? "C00000" : "000000" } },
+                                alignment: { horizontal: C === 4 ? "left" : "center", vertical: "center" },
                                 border: borderThin
                             };
                         }
@@ -915,17 +1083,17 @@
                 }
                 XLSX.utils.book_append_sheet(wb, ws3, `${itemLabel} 업체별 공급내역`);
 
-                const cleanFileName = docToExport.fileName.replace(/\.[^/.]+$/, "");
-                XLSX.writeFile(wb, `배송분류완료_${cleanFileName}.xlsx`);
-                showToast("권역별 분류 엑셀 다운로드가 완료되었습니다!", "success");
+                const now = new Date();
+                const yymmdd = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+                const outputFileName = `${itemLabel})떡집 ${itemLabel}배달_${yymmdd}.xlsx`;
+
+                XLSX.writeFile(wb, outputFileName);
+                showToast(`'${outputFileName}' 다운로드 완료!`, "success");
             };
 
-            const [newCompName, setNewCompName] = useState('');
-            const [newCompRep, setNewCompRep] = useState('');
-            const [newCompRegion, setNewCompRegion] = useState('제주시');
-            const [newCompAddress, setNewCompAddress] = useState('');
-            const [newCompPhone, setNewCompPhone] = useState('');
-
+            // ==========================================
+            // 10. 하차지(떡집 명단) 등록·수정·삭제·엑셀 동기화
+            // ==========================================
             const addRegion = async (e) => {
                 e.preventDefault();
                 const name = newCompName.trim();
@@ -939,25 +1107,17 @@
                     phone: newCompPhone.trim()
                 };
 
-                if (user && fbApi) {
-                    try {
-                        const { db, doc, setDoc } = fbApi;
-                        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'regions', name.replace(/\//g, '_'));
-                        await setDoc(docRef, newEntry);
-                        setNewCompName(''); setNewCompRep(''); setNewCompAddress(''); setNewCompPhone('');
-                        showToast(`'${name}' 하차지가 저장되었습니다.`);
-                    } catch (err) {
-                        console.error("Add region error:", err);
-                    }
-                } else {
-                    setMasterData(prev => {
-                        const next = { ...prev, [name]: newEntry };
-                        try { localStorage.setItem(LOCAL_MASTER_KEY, JSON.stringify(next)); } catch (e) {}
-                        return next;
-                    });
-                    setNewCompName(''); setNewCompRep(''); setNewCompAddress(''); setNewCompPhone('');
-                    showToast(`'${name}' 로컬 저장 완료.`);
-                }
+                const nextMaster = { ...masterData, [name]: newEntry };
+                await saveMasterToCloud(nextMaster);
+                setNewCompName(''); setNewCompRep(''); setNewCompAddress(''); setNewCompPhone('');
+                showToast(`'${name}' 하차지가 저장되었습니다.`, "success");
+            };
+
+            const deleteRegionItem = async (name) => {
+                const nextMaster = { ...masterData };
+                delete nextMaster[name];
+                await saveMasterToCloud(nextMaster);
+                showToast(`'${name}' 하차지가 삭제되었습니다.`, "success");
             };
 
             const handleMasterExcelUpload = async (e) => {
@@ -1003,7 +1163,6 @@
                             return;
                         }
 
-                        // 기존 잘못된 데이터를 남기지 않도록 완전히 새 명단 객체로 교체
                         const newMaster = {};
                         let successCount = 0;
 
@@ -1018,16 +1177,9 @@
                             const address = colMap.address !== undefined && row[colMap.address] ? String(row[colMap.address]).trim() : "";
                             const phone = colMap.phone !== undefined && row[colMap.phone] ? String(row[colMap.phone]).trim() : "";
                             const explicitRegion = colMap.region !== undefined && row[colMap.region] ? String(row[colMap.region]).trim() : "";
-
                             const region = explicitRegion || inferRegionByAddress(address);
 
-                            newMaster[name] = {
-                                name,
-                                rep,
-                                region,
-                                address,
-                                phone
-                            };
+                            newMaster[name] = { name, rep, region, address, phone };
                             successCount++;
                         }
 
@@ -1036,28 +1188,9 @@
                             return;
                         }
 
-                        // 클라우드 연결 시 기존 구버전 문서 삭제 후 새 명단 일괄 반영
-                        if (user && fbApi) {
-                            const { db, doc, setDoc, deleteDoc } = fbApi;
-                            const oldKeys = Object.keys(masterData);
-                            for (const oldName of oldKeys) {
-                                if (!newMaster[oldName]) {
-                                    try {
-                                        await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'regions', oldName.replace(/\//g, '_')));
-                                    } catch (delErr) {
-                                        console.error("Delete old region error:", delErr);
-                                    }
-                                }
-                            }
-                            for (const [name, entry] of Object.entries(newMaster)) {
-                                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'regions', name.replace(/\//g, '_'));
-                                await setDoc(docRef, entry);
-                            }
-                        }
-
-                        setMasterData(newMaster);
-                        try { localStorage.setItem(LOCAL_MASTER_KEY, JSON.stringify(newMaster)); } catch (e) {}
-                        showToast(`'${targetSheetName}' 시트 기준 ${successCount}곳 명단으로 완전 교체 완료!`, "success");
+                        // [쓰기 1회 절약 저장!] 100곳을 올려도 Firestore 쓰기 단 1회만 발생!
+                        await saveMasterToCloud(newMaster);
+                        showToast(`'${targetSheetName}' 기준 ${successCount}곳 명단 동기화 완료! (쓰기 1회 절약)`, "success");
                     } catch (err) {
                         console.error("Master upload error:", err);
                         showToast("엑셀 명단 처리 중 오류가 발생했습니다.", "error");
@@ -1067,11 +1200,9 @@
                 e.target.value = null;
             };
 
+            // 통계 계산
             const filteredStats = useMemo(() => {
-                let totalSacks = 0;
-                let completedSacks = 0;
-                let completedCount = 0;
-                let totalCount = 0;
+                let totalSacks = 0, completedSacks = 0, completedCount = 0, totalCount = 0;
                 const byRegion = { '제주시': 0, '신제주': 0, '서쪽': 0, '동쪽': 0, '서귀포': 0, '미분류': 0 };
                 const completedByRegion = { '제주시': 0, '신제주': 0, '서쪽': 0, '동쪽': 0, '서귀포': 0, '미분류': 0 };
                 const byCompany = {};
@@ -1086,7 +1217,7 @@
                 });
 
                 targetDocs.forEach(doc => {
-                    doc.data.forEach(row => {
+                    (doc.data || []).forEach(row => {
                         const s = (Number(row.sacks) || 0) + (Number(row.usSacks) || 0);
                         const m = findSmartMaster(row.name, row.rep, row.phone, row.address) || {};
                         const canonicalName = m.name || row.name;
@@ -1108,35 +1239,94 @@
                     });
                 });
 
-                const topCompanies = Object.entries(byCompany)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 10);
-
-                const myCompletedCompanies = Object.entries(completedByCompany)
-                    .sort((a, b) => b[1] - a[1]);
-
-                return { totalSacks, completedSacks, completedCount, totalCount, byRegion, completedByRegion, topCompanies, myCompletedCompanies, docCount: targetDocs.length };
+                const myCompletedCompanies = Object.entries(completedByCompany).sort((a, b) => b[1] - a[1]);
+                return { totalSacks, completedSacks, completedCount, totalCount, byRegion, completedByRegion, myCompletedCompanies, docCount: targetDocs.length };
             }, [history, selectedYear, selectedMonth, masterData]);
 
             const availableYears = useMemo(() => {
                 const years = new Set([new Date().getFullYear().toString()]);
-                history.forEach(doc => {
-                    if (doc.yearMonth) years.add(doc.yearMonth.split('-')[0]);
-                });
+                history.forEach(doc => { if (doc.yearMonth) years.add(doc.yearMonth.split('-')[0]); });
                 return Array.from(years).sort().reverse();
             }, [history]);
 
+            // 검색어 필터링된 하차지 목록 (가나다 오름차순)
+            const filteredMasterEntries = useMemo(() => {
+                const q = regionSearch.trim().toLowerCase();
+                return Object.entries(masterData)
+                    .filter(([name, info]) => {
+                        if (!q) return true;
+                        return [name, info.rep, info.region, info.address, info.phone].join(' ').toLowerCase().includes(q);
+                    })
+                    .sort((a, b) => a[0].localeCompare(b[0], 'ko-KR'));
+            }, [masterData, regionSearch]);
+
             return (
-                <div className="max-w-md mx-auto min-h-screen bg-[#f5f2eb] shadow-2xl flex flex-col relative pb-20 border-x border-[#e6dfd5]">
+                <div className="max-w-md mx-auto min-h-screen bg-[#f5f2eb] shadow-2xl flex flex-col relative safe-pb border-x border-[#e6dfd5]">
+                    {/* 토스트 알림 */}
                     {toast && (
-                        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-11/12 max-w-sm bg-stone-800 text-[#fdfbf7] px-4 py-3 rounded-2xl shadow-xl flex items-center text-sm font-medium">
-                            <Icon name={toast.type === 'error' ? 'alert-triangle' : 'check-circle'} className={toast.type === 'error' ? 'text-rose-300 mr-2 shrink-0' : 'text-emerald-300 mr-2 shrink-0'} />
-                            <span className="truncate">{toast.msg}</span>
+                        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-11/12 max-w-sm bg-stone-800 text-[#fdfbf7] px-4 py-3 rounded-2xl shadow-xl flex items-center text-xs font-bold">
+                            <Icon name={toast.type === 'error' ? 'alert-triangle' : 'check-circle'} className={toast.type === 'error' ? 'text-rose-300 mr-2' : 'text-emerald-300 mr-2'} />
+                            <span className="leading-snug">{toast.msg}</span>
                         </div>
                     )}
 
-                    {/* 헤더: Rice Red Bean 대문자 강조 */}
-                    <header className="bg-[#f5f2eb]/90 backdrop-blur-md px-6 pt-6 pb-4 sticky top-0 z-10 flex justify-between items-center border-b border-[#e6dfd5]">
+                    {/* 커스텀 삭제 확인 모달 (confirm() 완전 제거) */}
+                    {confirmDialog && (
+                        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                            <div className="bg-[#fffdfa] border border-[#e6dfd5] rounded-[24px] p-5 w-full max-w-xs shadow-2xl space-y-4">
+                                <h3 className="text-sm font-extrabold text-stone-800">{confirmDialog.title}</h3>
+                                <p className="text-xs text-stone-500 leading-relaxed">{confirmDialog.message}</p>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setConfirmDialog(null)} className="flex-1 py-2.5 rounded-xl bg-[#f4eee4] text-stone-700 text-xs font-bold">취소</button>
+                                    <button onClick={() => { confirmDialog.onConfirm(); setConfirmDialog(null); }} className="flex-1 py-2.5 rounded-xl bg-rose-700 text-white text-xs font-extrabold">삭제하기</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 제미나이 텍스트 바로 붙여넣기 모달 */}
+                    {showPasteModal && (
+                        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                            <div className="bg-[#fffdfa] border border-[#e6dfd5] rounded-[28px] p-5 w-full max-w-sm shadow-2xl space-y-3">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-sm font-extrabold text-stone-800 flex items-center">
+                                        <Icon name="clipboard" size={16} className="mr-1.5 text-amber-700" />
+                                        제미나이 추출 결과 바로 붙여넣기
+                                    </h3>
+                                    <button onClick={() => setShowPasteModal(false)} className="text-stone-400 hover:text-stone-700 p-1">
+                                        <Icon name="x" size={18} />
+                                    </button>
+                                </div>
+                                <p className="text-[11px] text-stone-500 leading-relaxed">
+                                    중간 엑셀 파일 없이 제미나이가 읽어준 <b>JSON이나 표(텍스트)</b>를 그대로 붙여넣으면 즉시 권역별 분류됩니다.
+                                </p>
+                                <div className="flex gap-1.5">
+                                    <button onClick={handleClipboardQuickPaste} className="flex-1 bg-amber-100 text-amber-900 py-2 rounded-xl text-xs font-extrabold active:scale-95 transition">
+                                        📋 클립보드 붙여넣기
+                                    </button>
+                                    <button onClick={copyGeminiFaxPrompt} className="flex-1 bg-[#f4eee4] text-stone-700 py-2 rounded-xl text-xs font-bold active:scale-95 transition">
+                                        🤖 추출 명령어 복사
+                                    </button>
+                                </div>
+                                <textarea
+                                    rows="7"
+                                    value={pasteText}
+                                    onChange={(e) => setPasteText(e.target.value)}
+                                    placeholder='여기에 제미나이 결과([{"name":"OO떡집", "sacks":10} ...] 또는 표)를 붙여넣으세요.'
+                                    className="w-full bg-[#f7f4ef] border border-[#d6cec2] rounded-2xl p-3 text-xs font-mono outline-none focus:bg-white focus:border-amber-700"
+                                />
+                                <button
+                                    onClick={handleProcessPastedText}
+                                    className="w-full bg-stone-800 hover:bg-stone-900 text-white py-3 rounded-2xl text-xs font-extrabold shadow-md active:scale-95 transition"
+                                >
+                                    ⚡ 지금 바로 분류{autoDownloadExcel ? ' & 엑셀 다운' : '하기'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 헤더 */}
+                    <header className="bg-[#f5f2eb]/95 backdrop-blur-md px-5 pt-5 pb-3.5 sticky top-0 z-10 flex justify-between items-center border-b border-[#e6dfd5]">
                         <div>
                             <p className="text-[10px] font-bold text-stone-400 tracking-widest uppercase mb-0.5">Jeju Logistics System</p>
                             <h1 className="text-xl font-bold text-stone-700 tracking-tight flex items-baseline space-x-1.5">
@@ -1145,123 +1335,156 @@
                                 <span><strong className="text-2xl font-black text-stone-900">B</strong>ean</span>
                             </h1>
                         </div>
-                        <div className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center shadow-sm ${user ? 'bg-[#e3ece6] text-[#2c5e43]' : 'bg-[#f4ebd9] text-[#8a6d3b]'}`}>
-                            <span className={`w-2 h-2 rounded-full mr-1.5 ${user ? 'bg-[#3b7a57] animate-pulse' : 'bg-[#b88b4a]'}`}></span>
-                            {user ? '클라우드 연결됨' : '로컬 모드'}
+                        <div className={`px-3 py-1.5 rounded-full text-[11px] font-bold flex items-center shadow-sm ${
+                            dbStatus === 'connected' ? 'bg-[#e3ece6] text-[#2c5e43]' :
+                            dbStatus === 'quota' ? 'bg-[#fdf3f2] text-[#9e3b33]' : 'bg-[#f4ebd9] text-[#8a6d3b]'
+                        }`}>
+                            <span className={`w-2 h-2 rounded-full mr-1.5 ${
+                                dbStatus === 'connected' ? 'bg-[#3b7a57] animate-pulse' :
+                                dbStatus === 'quota' ? 'bg-rose-600' : 'bg-[#b88b4a]'
+                            }`}></span>
+                            {dbStatus === 'connected' ? '클라우드 연결됨' : dbStatus === 'quota' ? '한도초과(로컬)' : '로컬 모드'}
                         </div>
                     </header>
 
                     {/* 메인 컨텐츠 */}
-                    <main className="flex-1 p-5 overflow-y-auto">
+                    <main className="flex-1 p-4 overflow-y-auto">
                         
-                        {/* 1. 업로드 탭 */}
+                        {/* 1. 업로드 & 딸깍 추출 탭 */}
                         {activeTab === 'upload' && (
                             <div className="space-y-4">
-                                <div className="bg-[#fffdfa] rounded-[28px] p-6 text-center shadow-sm border border-[#e6dfd5]">
-                                    <div className="w-16 h-16 bg-[#f4eee4] text-stone-700 rounded-full flex items-center justify-center mx-auto mb-3 shadow-inner">
-                                        <Icon name="upload-cloud" size={30} />
+                                <div className="bg-[#fffdfa] rounded-[28px] p-5 shadow-sm border border-[#e6dfd5] space-y-4">
+                                    {/* 품목 선택(쌀/팥) + 즉시 자동 다운로드 스위치 */}
+                                    <div className="flex items-center justify-between gap-2 pb-3 border-b border-[#f0e9df]">
+                                        <div className="flex bg-[#f4eee4] p-1 rounded-xl">
+                                            <button
+                                                onClick={() => setSelectedItemType('쌀')}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition ${selectedItemType === '쌀' ? 'bg-stone-800 text-white shadow-sm' : 'text-stone-500'}`}
+                                            >🌾 쌀</button>
+                                            <button
+                                                onClick={() => setSelectedItemType('팥')}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition ${selectedItemType === '팥' ? 'bg-rose-800 text-white shadow-sm' : 'text-stone-500'}`}
+                                            >🫘 팥</button>
+                                        </div>
+                                        <label className="flex items-center gap-1.5 cursor-pointer bg-[#eef5f0] border border-[#cde0d3] px-3 py-1.5 rounded-xl">
+                                            <input
+                                                type="checkbox"
+                                                checked={autoDownloadExcel}
+                                                onChange={(e) => setAutoDownloadExcel(e.target.checked)}
+                                                className="w-4 h-4 accent-[#3b6e52] rounded"
+                                            />
+                                            <span className="text-[11px] font-extrabold text-[#2c5e43]">⚡ 분류 즉시 자동다운</span>
+                                        </label>
                                     </div>
-                                    <h2 className="text-lg font-extrabold text-stone-800 mb-1">공급내역서 파일 업로드</h2>
-                                    <p className="text-xs text-stone-500 mb-5 leading-relaxed">
-                                        쌀 또는 팥 공급내역서 엑셀 파일을 선택하면<br/>권역별로 자동 분류하고 클라우드에 보관합니다.
-                                    </p>
-                                    <label className="block w-full bg-stone-800 hover:bg-stone-900 text-[#fdfbf7] font-bold py-4 px-6 rounded-2xl cursor-pointer transition active:scale-95 shadow-md">
-                                        파일 선택하기 (.xlsx / .csv)
-                                        <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="hidden" />
-                                    </label>
+
+                                    <div className="text-center">
+                                        <div className="w-14 h-14 bg-[#f4eee4] text-stone-700 rounded-full flex items-center justify-center mx-auto mb-2.5 shadow-inner">
+                                            <Icon name="upload-cloud" size={26} />
+                                        </div>
+                                        <h2 className="text-base font-extrabold text-stone-800 mb-1">공급내역서 업로드 · 딸깍 분류</h2>
+                                        <p className="text-[11px] text-stone-500 mb-4 leading-relaxed">
+                                            엑셀 파일을 올리거나, 제미나이 추출 텍스트를 바로 붙여넣으면<br/>권역별로 자동 분류하고 엑셀을 내려받습니다.
+                                        </p>
+
+                                        <div className="space-y-2.5">
+                                            <button
+                                                onClick={() => setShowPasteModal(true)}
+                                                className="w-full bg-amber-700 hover:bg-amber-800 text-[#fdfbf7] font-extrabold py-3.5 px-5 rounded-2xl transition active:scale-95 shadow-md flex items-center justify-center text-xs"
+                                            >
+                                                <Icon name="zap" size={16} className="mr-1.5 text-amber-300" />
+                                                제미나이 텍스트 바로 붙여넣기 (중간엑셀 생략)
+                                            </button>
+                                            <label className="block w-full bg-stone-800 hover:bg-stone-900 text-[#fdfbf7] font-bold py-3.5 px-5 rounded-2xl cursor-pointer transition active:scale-95 shadow-sm text-xs">
+                                                📂 엑셀 파일 선택하기 (.xlsx / .csv)
+                                                <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="hidden" />
+                                            </label>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {currentDoc && (
-                                    <div className="bg-[#fffdfa] rounded-[28px] p-6 shadow-sm border border-[#e6dfd5]">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <div>
-                                                <span className="text-[11px] font-bold bg-[#f4eee4] text-stone-700 px-2.5 py-1 rounded-md">{currentDoc.yearMonth}</span>
-                                                <h3 className="font-extrabold text-base text-stone-800 mt-1 truncate max-w-[200px]">{currentDoc.fileName}</h3>
+                                    <div className="bg-[#fffdfa] rounded-[28px] p-5 shadow-sm border border-[#e6dfd5]">
+                                        <div className="flex justify-between items-center mb-3.5">
+                                            <div className="min-w-0 pr-2">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-[10px] font-bold bg-[#f4eee4] text-stone-700 px-2 py-0.5 rounded-md">{currentDoc.yearMonth}</span>
+                                                    <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md ${(currentDoc.itemType || selectedItemType) === '팥' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>
+                                                        {currentDoc.itemType || selectedItemType}
+                                                    </span>
+                                                </div>
+                                                <h3 className="font-extrabold text-sm text-stone-800 mt-1 truncate">{currentDoc.fileName}</h3>
                                             </div>
-                                            <div className="text-right">
-                                                <p className="text-xs text-stone-400 font-medium">총 배정 수량</p>
-                                                <p className="text-2xl font-black text-stone-800">{currentDoc.totalSacks}<span className="text-sm font-normal ml-0.5">포</span></p>
+                                            <div className="text-right shrink-0">
+                                                <p className="text-[10px] text-stone-400 font-medium">총 배정 (국산+미국산)</p>
+                                                <p className="text-2xl font-black text-stone-800 leading-tight">{currentDoc.totalSacks}<span className="text-xs font-normal ml-0.5">포</span></p>
+                                                {currentDoc.totalUsSacks > 0 && (
+                                                    <p className="text-[10px] text-rose-700 font-bold">국산 {currentDoc.totalKrSacks} · 미국산 {currentDoc.totalUsSacks}</p>
+                                                )}
                                             </div>
                                         </div>
 
                                         {currentDoc.unclassifiedCount > 0 && (
-                                            <div className="mb-4 p-3.5 bg-[#fdf3f2] border border-[#f5d5d2] rounded-2xl flex items-center justify-between">
+                                            <div className="mb-3 p-3 bg-[#fdf3f2] border border-[#f5d5d2] rounded-2xl flex items-center justify-between">
                                                 <div className="flex items-center text-[#9e3b33] text-xs font-bold">
-                                                    <Icon name="alert-circle" size={16} className="mr-1.5 shrink-0" />
+                                                    <Icon name="alert-circle" size={15} className="mr-1.5" />
                                                     <span>미분류 업체 {currentDoc.unclassifiedCount}곳 발견!</span>
                                                 </div>
-                                                <button onClick={() => setActiveTab('regions')} className="text-[11px] bg-[#fffdfa] text-[#9e3b33] px-2.5 py-1 rounded-lg border border-[#f0c2be] font-bold shadow-sm">하차지 목록</button>
+                                                <button onClick={() => setActiveTab('regions')} className="text-[11px] bg-[#fffdfa] text-[#9e3b33] px-2.5 py-1 rounded-lg border border-[#f0c2be] font-bold">하차지 목록</button>
                                             </div>
                                         )}
 
                                         {/* 미등록 업체 알림 목록 */}
                                         {currentDoc.unregisteredList && currentDoc.unregisteredList.length > 0 && (
-                                            <div className="mb-4 p-3.5 bg-[#fdf3f2] border border-[#f5d5d2] rounded-2xl space-y-2">
+                                            <div className="mb-3 p-3 bg-[#fdf3f2] border border-[#f5d5d2] rounded-2xl space-y-2">
                                                 <div className="flex items-center justify-between text-[#9e3b33] text-xs font-extrabold">
-                                                    <span className="flex items-center">
-                                                        <Icon name="user-x" size={15} className="mr-1.5 shrink-0" />
-                                                        명단 미등록 업체 ({currentDoc.unregisteredList.length}곳)
-                                                    </span>
-                                                    <span className="text-[10px] font-bold opacity-80">터치 시 바로 등록</span>
+                                                    <span className="flex items-center"><Icon name="user-x" size={14} className="mr-1.5" />명단 미등록 ({currentDoc.unregisteredList.length}곳)</span>
+                                                    <span className="text-[10px] opacity-80">터치 시 바로 등록</span>
                                                 </div>
-                                                <div className="max-h-36 overflow-y-auto space-y-1.5 pr-0.5">
+                                                <div className="max-h-32 overflow-y-auto space-y-1.5 pr-0.5">
                                                     {currentDoc.unregisteredList.map((u, idx) => (
-                                                        <div key={idx} className="bg-white/90 px-3 py-2 rounded-xl border border-[#f5d5d2] flex items-center justify-between text-[11px]">
+                                                        <div key={idx} className="bg-white/90 px-2.5 py-1.5 rounded-xl border border-[#f5d5d2] flex items-center justify-between text-[11px]">
                                                             <div className="min-w-0 pr-2">
                                                                 <span className="font-extrabold text-stone-800">{u.name}</span>
                                                                 {u.rep && <span className="text-stone-500 ml-1">({u.rep})</span>}
                                                                 <span className="text-rose-700 font-bold ml-1.5">{u.sacks}포</span>
-                                                                {(u.phone || u.address) && (
-                                                                    <p className="text-[10px] text-stone-400 truncate">{u.address || ''} {u.phone || ''}</p>
-                                                                )}
                                                             </div>
                                                             <button
                                                                 onClick={() => {
-                                                                    setNewCompName(u.name || '');
-                                                                    setNewCompRep(u.rep || '');
-                                                                    setNewCompAddress(u.address || '');
-                                                                    setNewCompPhone(u.phone || '');
-                                                                    const guessed = inferRegionByAddress(u.address);
-                                                                    setNewCompRegion(guessed === '미분류' ? '제주시' : guessed);
+                                                                    setNewCompName(u.name || ''); setNewCompRep(u.rep || '');
+                                                                    setNewCompAddress(u.address || ''); setNewCompPhone(u.phone || '');
+                                                                    const g = inferRegionByAddress(u.address);
+                                                                    setNewCompRegion(g === '미분류' ? '제주시' : g);
                                                                     setActiveTab('regions');
                                                                 }}
-                                                                className="shrink-0 bg-[#9e3b33] text-white px-2.5 py-1 rounded-lg font-bold text-[10px] active:scale-95 transition"
-                                                            >
-                                                                등록
-                                                            </button>
+                                                                className="shrink-0 bg-[#9e3b33] text-white px-2.5 py-1 rounded-lg font-bold text-[10px]"
+                                                            >등록</button>
                                                         </div>
                                                     ))}
                                                 </div>
                                             </div>
                                         )}
 
-                                        {/* 오타 및 상호/대표자 불일치 자동 보정 확인 알림 */}
+                                        {/* 오타 및 불일치 알림 */}
                                         {currentDoc.typoList && currentDoc.typoList.length > 0 && (
-                                            <div className="mb-4 p-3.5 bg-[#fef9ec] border border-[#f2deb0] rounded-2xl space-y-2">
+                                            <div className="mb-3 p-3 bg-[#fef9ec] border border-[#f2deb0] rounded-2xl space-y-1.5">
                                                 <div className="flex items-center justify-between text-[#8a6016] text-xs font-extrabold">
-                                                    <span className="flex items-center">
-                                                        <Icon name="alert-triangle" size={15} className="mr-1.5 shrink-0" />
-                                                        오타·표기 불일치 확인 ({currentDoc.typoList.length}건)
-                                                    </span>
-                                                    <span className="text-[10px] font-bold opacity-80">명단 기준 매칭됨</span>
+                                                    <span className="flex items-center"><Icon name="alert-triangle" size={14} className="mr-1.5" />오타·표기 자동보정 ({currentDoc.typoList.length}건)</span>
                                                 </div>
-                                                <div className="max-h-36 overflow-y-auto space-y-1.5 pr-0.5">
+                                                <div className="max-h-28 overflow-y-auto space-y-1 pr-0.5">
                                                     {currentDoc.typoList.map((t, idx) => (
-                                                        <div key={idx} className="bg-white/90 px-3 py-2 rounded-xl border border-[#f2deb0] text-[11px] space-y-0.5">
+                                                        <div key={idx} className="bg-white/90 px-2.5 py-1.5 rounded-xl border border-[#f2deb0] text-[11px]">
                                                             {t.nameDiff && (
                                                                 <div className="flex items-center flex-wrap gap-1">
-                                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">상호</span>
-                                                                    <span className="line-through text-stone-400">{t.fileName}</span>
-                                                                    <span className="text-stone-400">→</span>
+                                                                    <span className="text-[10px] font-bold px-1.5 rounded bg-amber-100 text-amber-800">상호</span>
+                                                                    <span className="line-through text-stone-400">{t.fileName}</span><span>→</span>
                                                                     <span className="font-extrabold text-stone-800">{t.masterName}</span>
                                                                 </div>
                                                             )}
                                                             {t.repDiff && (
                                                                 <div className="flex items-center flex-wrap gap-1">
-                                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">대표자</span>
+                                                                    <span className="text-[10px] font-bold px-1.5 rounded bg-rose-100 text-rose-800">대표</span>
                                                                     <span className="font-bold text-stone-700">{t.masterName}:</span>
-                                                                    <span className="line-through text-stone-400">{t.fileRep}</span>
-                                                                    <span className="text-stone-400">→</span>
+                                                                    <span className="line-through text-stone-400">{t.fileRep}</span><span>→</span>
                                                                     <span className="font-extrabold text-amber-800">{t.masterRep}</span>
                                                                 </div>
                                                             )}
@@ -1271,7 +1494,8 @@
                                             </div>
                                         )}
 
-                                        <div className="grid grid-cols-3 gap-2.5 mb-5">
+                                        {/* 권역별 요약 카드 */}
+                                        <div className="grid grid-cols-3 gap-2 mb-4">
                                             {['제주시', '신제주', '서쪽', '동쪽', '서귀포', '미분류'].map(r => {
                                                 const sum = currentDoc.data.filter(d => {
                                                     const m = findSmartMaster(d.name, d.rep, d.phone, d.address) || {};
@@ -1281,29 +1505,42 @@
                                                 }).reduce((acc, cur) => acc + (Number(cur.sacks) || 0) + (Number(cur.usSacks) || 0), 0);
                                                 if (sum === 0 && r === '미분류') return null;
                                                 return (
-                                                    <div key={r} className={`p-3 rounded-2xl border text-center ${r === '미분류' ? 'bg-[#fdf3f2] border-[#f5d5d2]' : 'bg-[#f7f4ef] border-[#e8e2d9]'}`}>
-                                                        <div className="text-xs text-stone-500 font-bold mb-0.5">{r}</div>
-                                                        <div className="text-base font-extrabold text-stone-800">{sum}포</div>
+                                                    <div key={r} className={`p-2.5 rounded-2xl border text-center ${r === '미분류' ? 'bg-[#fdf3f2] border-[#f5d5d2]' : 'bg-[#f7f4ef] border-[#e8e2d9]'}`}>
+                                                        <div className="text-[11px] text-stone-500 font-bold">{r}</div>
+                                                        <div className="text-sm font-extrabold text-stone-800">{sum}포</div>
                                                     </div>
                                                 );
                                             })}
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-2.5">
+                                        {/* 메인 액션: 엑셀 다운 + 나의 하차지 */}
+                                        <div className="grid grid-cols-2 gap-2 mb-3">
                                             <button 
-                                                onClick={() => { setSelectedDeliveryDocId(currentDoc.id); setActiveTab('my_delivery'); }} 
-                                                className="w-full bg-amber-700 hover:bg-amber-800 text-[#fdfbf7] font-bold py-3.5 rounded-2xl flex items-center justify-center shadow-md transition active:scale-95 text-xs"
-                                            >
-                                                <Icon name="check-square" size={16} className="mr-1.5" />
-                                                나의 하차지 체크
-                                            </button>
-                                            <button 
-                                                onClick={() => exportToExcel(currentDoc)} 
-                                                className="w-full bg-[#3b6e52] hover:bg-[#2f5942] text-[#fdfbf7] font-bold py-3.5 rounded-2xl flex items-center justify-center shadow-md transition active:scale-95 text-xs"
+                                                onClick={() => exportToExcel(currentDoc, currentDoc.itemType || selectedItemType)} 
+                                                className="w-full bg-[#3b6e52] hover:bg-[#2f5942] text-[#fdfbf7] font-extrabold py-3.5 rounded-2xl flex items-center justify-center shadow-md transition active:scale-95 text-xs"
                                             >
                                                 <Icon name="download" size={16} className="mr-1.5" />
                                                 분류 엑셀 다운
                                             </button>
+                                            <button 
+                                                onClick={() => { setSelectedDeliveryDocId(currentDoc.id); setActiveTab('my_delivery'); }} 
+                                                className="w-full bg-amber-700 hover:bg-amber-800 text-[#fdfbf7] font-extrabold py-3.5 rounded-2xl flex items-center justify-center shadow-md transition active:scale-95 text-xs"
+                                            >
+                                                <Icon name="check-square" size={16} className="mr-1.5" />
+                                                나의 하차지 체크
+                                            </button>
+                                        </div>
+
+                                        {/* [신규] 권역별 카톡 텍스트 원터치 복사 바 */}
+                                        <div className="pt-3 border-t border-[#f0e9df]">
+                                            <p className="text-[10px] font-bold text-stone-400 mb-2 flex items-center">
+                                                <Icon name="copy" size={12} className="mr-1" /> 기사님 전달용 권역별 카톡 명단 원터치 복사
+                                            </p>
+                                            <div className="grid grid-cols-3 gap-1.5">
+                                                <button onClick={() => copyRegionKakaoText(currentDoc, ['제주시', '신제주'], '제주시·신제주')} className="bg-[#f4eee4] hover:bg-[#e8e0d3] text-stone-700 py-2 rounded-xl text-[11px] font-extrabold active:scale-95 transition">제주시·신제주</button>
+                                                <button onClick={() => copyRegionKakaoText(currentDoc, ['서쪽'], '서쪽')} className="bg-[#f4eee4] hover:bg-[#e8e0d3] text-stone-700 py-2 rounded-xl text-[11px] font-extrabold active:scale-95 transition">서쪽 권역</button>
+                                                <button onClick={() => copyRegionKakaoText(currentDoc, ['동쪽', '서귀포'], '동쪽·서귀포')} className="bg-[#f4eee4] hover:bg-[#e8e0d3] text-stone-700 py-2 rounded-xl text-[11px] font-extrabold active:scale-95 transition">동쪽·서귀포</button>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -1313,7 +1550,7 @@
                         {/* 2. 나의 하차지 탭 */}
                         {activeTab === 'my_delivery' && (() => {
                             const activeDoc = history.find(h => h.id === selectedDeliveryDocId) || history[0] || null;
-                            const allRows = activeDoc ? activeDoc.data.map((r, i) => {
+                            const allRows = activeDoc ? (activeDoc.data || []).map((r, i) => {
                                 const m = findSmartMaster(r.name, r.rep, r.phone, r.address) || {};
                                 const resolvedAddr = m.address || r.address || '';
                                 const totalRowSacks = (Number(r.sacks) || 0) + (Number(r.usSacks) || 0);
@@ -1342,9 +1579,8 @@
                             const targetIndices = filteredRows.map(r => r.origIdx);
 
                             return (
-                                <div className="space-y-4">
-                                    {/* 문서 선택 및 권역 필터 */}
-                                    <div className="bg-[#fffdfa] p-4 rounded-[24px] shadow-sm border border-[#e6dfd5] space-y-3">
+                                <div className="space-y-3.5">
+                                    <div className="bg-[#fffdfa] p-4 rounded-[24px] shadow-sm border border-[#e6dfd5] space-y-2.5">
                                         <div className="flex items-center justify-between">
                                             <span className="text-xs font-extrabold text-stone-700 flex items-center">
                                                 <Icon name="file-spreadsheet" size={15} className="mr-1.5 text-amber-700" />
@@ -1353,117 +1589,78 @@
                                             <span className="text-[11px] text-stone-400 font-bold">체크 시 자동 저장</span>
                                         </div>
                                         {history.length === 0 ? (
-                                            <div className="text-xs text-stone-400 py-2 text-center">먼저 [업로드] 탭에서 엑셀 파일을 올려주세요.</div>
+                                            <div className="text-xs text-stone-400 py-2 text-center">먼저 [업로드] 탭에서 내역서를 올려주세요.</div>
                                         ) : (
                                             <select
                                                 value={activeDoc ? activeDoc.id : ''}
                                                 onChange={(e) => setSelectedDeliveryDocId(e.target.value)}
-                                                className="w-full bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2.5 text-xs font-bold text-stone-800 outline-none"
+                                                className="w-full bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2 text-xs font-bold text-stone-800 outline-none"
                                             >
                                                 {history.map(h => (
-                                                    <option key={h.id} value={h.id}>
-                                                        [{h.yearMonth}] {h.fileName}
-                                                    </option>
+                                                    <option key={h.id} value={h.id}>[{h.yearMonth}] {h.fileName}</option>
                                                 ))}
                                             </select>
                                         )}
 
-                                        {/* 권역 필터 버튼 */}
                                         <div className="flex gap-1.5 overflow-x-auto pb-1">
                                             {['전체', '제주시', '신제주', '서쪽', '동쪽', '서귀포'].map(reg => (
                                                 <button
                                                     key={reg}
                                                     onClick={() => setDeliveryRegionFilter(reg)}
                                                     className={`px-3 py-1.5 rounded-xl text-xs font-extrabold shrink-0 transition ${
-                                                        deliveryRegionFilter === reg
-                                                            ? 'bg-stone-800 text-white shadow-sm'
-                                                            : 'bg-[#f4eee4] text-stone-600 hover:bg-[#e8e0d3]'
+                                                        deliveryRegionFilter === reg ? 'bg-stone-800 text-white shadow-sm' : 'bg-[#f4eee4] text-stone-600'
                                                     }`}
-                                                >
-                                                    {reg}
-                                                </button>
+                                                >{reg}</button>
                                             ))}
                                         </div>
 
-                                        {/* 권역별 일괄 체크 / 체크 해지 버튼 */}
                                         {activeDoc && filteredRows.length > 0 && (
-                                            <div className="flex gap-2 pt-1">
-                                                <button
-                                                    onClick={() => setBulkDeliveryComplete(activeDoc, targetIndices, true)}
-                                                    className="flex-1 bg-[#e3ece6] hover:bg-[#d2e2d7] text-[#2c5e43] py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center transition active:scale-95"
-                                                >
-                                                    <Icon name="check-square" size={14} className="mr-1.5" />
-                                                    [{deliveryRegionFilter}] 전체 체크
+                                            <div className="flex gap-2">
+                                                <button onClick={() => setBulkDeliveryComplete(activeDoc, targetIndices, true)} className="flex-1 bg-[#e3ece6] text-[#2c5e43] py-2 rounded-xl text-xs font-extrabold flex items-center justify-center active:scale-95 transition">
+                                                    <Icon name="check-square" size={14} className="mr-1" />[{deliveryRegionFilter}] 전체 체크
                                                 </button>
-                                                <button
-                                                    onClick={() => setBulkDeliveryComplete(activeDoc, targetIndices, false)}
-                                                    className="flex-1 bg-[#fdf3f2] hover:bg-[#f9e2e0] text-[#9e3b33] py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center transition active:scale-95 border border-[#f5d5d2]"
-                                                >
-                                                    <Icon name="rotate-ccw" size={14} className="mr-1.5" />
-                                                    [{deliveryRegionFilter}] 체크 해지
+                                                <button onClick={() => setBulkDeliveryComplete(activeDoc, targetIndices, false)} className="flex-1 bg-[#fdf3f2] text-[#9e3b33] py-2 rounded-xl text-xs font-extrabold flex items-center justify-center border border-[#f5d5d2] active:scale-95 transition">
+                                                    <Icon name="rotate-ccw" size={14} className="mr-1" />[{deliveryRegionFilter}] 체크 해지
                                                 </button>
                                             </div>
                                         )}
                                     </div>
 
-                                    {/* 내가 돌린 갯수 요약 배너 */}
                                     {activeDoc && (
-                                        <div className="bg-stone-800 text-[#fdfbf7] p-5 rounded-[24px] shadow-md flex justify-between items-center">
+                                        <div className="bg-stone-800 text-[#fdfbf7] p-4 rounded-[24px] shadow-md flex justify-between items-center">
                                             <div>
-                                                <p className="text-stone-400 text-[11px] font-bold mb-0.5">
-                                                    내가 돌린 갯수 ({deliveryRegionFilter})
-                                                </p>
-                                                <div className="flex items-baseline space-x-1.5">
+                                                <p className="text-stone-400 text-[11px] font-bold mb-0.5">내가 돌린 갯수 ({deliveryRegionFilter})</p>
+                                                <div className="flex items-baseline space-x-1">
                                                     <span className="text-3xl font-black text-amber-400">{myDoneSacks}</span>
                                                     <span className="text-sm font-bold text-stone-200">포</span>
                                                 </div>
                                             </div>
                                             <div className="text-right">
                                                 <p className="text-stone-400 text-[11px] font-bold mb-0.5">선택한 하차지</p>
-                                                <p className="text-xl font-extrabold text-emerald-400">
-                                                    {myDonePlaces} <span className="text-xs font-normal text-stone-300">곳</span>
-                                                </p>
+                                                <p className="text-xl font-extrabold text-emerald-400">{myDonePlaces} <span className="text-xs font-normal text-stone-300">곳</span></p>
                                             </div>
                                         </div>
                                     )}
 
-                                    {/* 보기 방식 전환 (전체 선택 표 vs 체크한 목록형) */}
                                     {activeDoc && (
                                         <div className="grid grid-cols-2 gap-1.5 bg-[#e6dfd5] p-1 rounded-2xl">
-                                            <button
-                                                onClick={() => setDeliveryViewMode('table')}
-                                                className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center transition ${
-                                                    deliveryViewMode === 'table'
-                                                        ? 'bg-[#fffdfa] text-stone-800 shadow-sm'
-                                                        : 'text-stone-500 hover:text-stone-700'
-                                                }`}
-                                            >
-                                                <Icon name="table" size={14} className="mr-1.5" />
-                                                전체 선택 표 ({filteredRows.length}곳)
+                                            <button onClick={() => setDeliveryViewMode('table')} className={`py-2 rounded-xl text-xs font-extrabold flex items-center justify-center transition ${deliveryViewMode === 'table' ? 'bg-[#fffdfa] text-stone-800 shadow-sm' : 'text-stone-500'}`}>
+                                                <Icon name="table" size={14} className="mr-1.5" />전체 선택 표 ({filteredRows.length}곳)
                                             </button>
-                                            <button
-                                                onClick={() => setDeliveryViewMode('checked_list')}
-                                                className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center transition ${
-                                                    deliveryViewMode === 'checked_list'
-                                                        ? 'bg-[#fffdfa] text-amber-800 shadow-sm'
-                                                        : 'text-stone-500 hover:text-stone-700'
-                                                }`}
-                                            >
-                                                <Icon name="list-checks" size={14} className="mr-1.5" />
-                                                체크한 목록만 ({myDonePlaces}곳)
+                                            <button onClick={() => setDeliveryViewMode('checked_list')} className={`py-2 rounded-xl text-xs font-extrabold flex items-center justify-center transition ${deliveryViewMode === 'checked_list' ? 'bg-[#fffdfa] text-amber-800 shadow-sm' : 'text-stone-500'}`}>
+                                                <Icon name="list-checks" size={14} className="mr-1.5" />체크한 목록만 ({myDonePlaces}곳)
                                             </button>
                                         </div>
                                     )}
 
-                                    {/* 뷰 모드 1: 표 형식 (업체명 | 포대 | 하차 완료 체크박스) */}
                                     {activeDoc && deliveryViewMode === 'table' && (
                                         <div className="bg-[#fffdfa] rounded-[24px] shadow-sm border border-[#e6dfd5] overflow-hidden">
                                             <table className="w-full text-left border-collapse">
                                                 <thead>
                                                     <tr className="bg-[#f4eee4] border-b border-[#e6dfd5] text-stone-700 text-xs font-extrabold">
-                                                        <th className="py-3.5 px-4">업체명</th>
-                                                        <th className="py-3.5 px-2 text-center w-24">포대</th>
-                                                        <th className="py-3.5 px-3 text-center w-28">하차 완료</th>
+                                                        <th className="py-3 px-4">업체명</th>
+                                                        <th className="py-3 px-2 text-center w-24">포대</th>
+                                                        <th className="py-3 px-3 text-center w-28">하차 완료</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-[#f4eee4] text-xs">
@@ -1472,25 +1669,16 @@
                                                             key={row.origIdx}
                                                             onClick={() => toggleDeliveryComplete(activeDoc, row.origIdx)}
                                                             className={`cursor-pointer transition ${
-                                                                row.isSplit
-                                                                    ? 'bg-[#fef9ec]/90 text-stone-700'
-                                                                    : row.completed
-                                                                        ? 'bg-[#eef5f0]/80 text-stone-400'
-                                                                        : 'hover:bg-[#faf8f5] text-stone-800'
+                                                                row.isSplit ? 'bg-[#fef9ec]/90 text-stone-700' :
+                                                                row.completed ? 'bg-[#eef5f0]/80 text-stone-400' : 'hover:bg-[#faf8f5] text-stone-800'
                                                             }`}
                                                         >
-                                                            <td className="py-3.5 px-4">
+                                                            <td className="py-3 px-4">
                                                                 <div className="flex items-center space-x-1.5">
-                                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ede8df] text-stone-600 font-bold shrink-0">
-                                                                        {row.resolvedRegion}
-                                                                    </span>
-                                                                    <span className={`font-extrabold text-sm ${row.completed && !row.isSplit ? 'line-through text-stone-400' : 'text-stone-800'}`}>
-                                                                        {row.name}
-                                                                    </span>
+                                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#ede8df] text-stone-600 font-bold shrink-0">{row.resolvedRegion}</span>
+                                                                    <span className={`font-extrabold text-sm ${row.completed && !row.isSplit ? 'line-through text-stone-400' : 'text-stone-800'}`}>{row.name}</span>
                                                                 </div>
-                                                                {row.address && (
-                                                                    <p className="text-[11px] text-stone-400 truncate mt-0.5 max-w-[175px]">{row.address}</p>
-                                                                )}
+                                                                {row.address && <p className="text-[11px] text-stone-400 truncate mt-0.5 max-w-[170px]">{row.address}</p>}
                                                             </td>
                                                             <td className="py-3 px-2 text-center" onClick={(e) => { if (row.isSplit) e.stopPropagation(); }}>
                                                                 {row.isSplit ? (
@@ -1500,23 +1688,13 @@
                                                                             <span className="text-[10px] font-bold text-stone-400">/{row.totalRowSacks}포</span>
                                                                         </div>
                                                                         <div className="flex items-center space-x-1">
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => adjustMySacks(activeDoc, row.origIdx, -1)}
-                                                                                className="w-5 h-5 rounded bg-[#e8dfd1] text-stone-700 font-black text-xs flex items-center justify-center active:scale-90"
-                                                                            >-</button>
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => adjustMySacks(activeDoc, row.origIdx, 1)}
-                                                                                className="w-5 h-5 rounded bg-[#e8dfd1] text-stone-700 font-black text-xs flex items-center justify-center active:scale-90"
-                                                                            >+</button>
+                                                                            <button type="button" onClick={() => adjustMySacks(activeDoc, row.origIdx, -1)} className="w-5 h-5 rounded bg-[#e8dfd1] text-stone-700 font-black text-xs flex items-center justify-center">-</button>
+                                                                            <button type="button" onClick={() => adjustMySacks(activeDoc, row.origIdx, 1)} className="w-5 h-5 rounded bg-[#e8dfd1] text-stone-700 font-black text-xs flex items-center justify-center">+</button>
                                                                         </div>
                                                                     </div>
                                                                 ) : (
                                                                     <div>
-                                                                        <span className={`text-base font-black ${row.completed ? 'text-stone-400' : 'text-rose-700'}`}>
-                                                                            {row.totalRowSacks}
-                                                                        </span>
+                                                                        <span className={`text-base font-black ${row.completed ? 'text-stone-400' : 'text-rose-700'}`}>{row.totalRowSacks}</span>
                                                                         <span className="text-[11px] font-bold ml-0.5">포</span>
                                                                     </div>
                                                                 )}
@@ -1533,94 +1711,51 @@
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => toggleHalfDelivery(activeDoc, row.origIdx)}
-                                                                            className={`px-2 py-1 rounded-lg text-[11px] font-extrabold transition active:scale-95 ${
-                                                                                row.isSplit
-                                                                                    ? 'bg-amber-600 text-white shadow-sm'
-                                                                                    : 'bg-[#f4eee4] text-stone-600 hover:bg-[#e6dfd5]'
-                                                                            }`}
-                                                                            title="수량 절반만 체크"
-                                                                        >
-                                                                            절반
-                                                                        </button>
+                                                                            className={`px-2 py-1 rounded-lg text-[11px] font-extrabold transition active:scale-95 ${row.isSplit ? 'bg-amber-600 text-white shadow-sm' : 'bg-[#f4eee4] text-stone-600'}`}
+                                                                        >절반</button>
                                                                     )}
                                                                 </div>
                                                             </td>
                                                         </tr>
                                                     ))}
                                                     {filteredRows.length === 0 && (
-                                                        <tr>
-                                                            <td colSpan="3" className="py-8 text-center text-stone-400 font-medium">
-                                                                해당 권역에 배정된 하차지가 없습니다.
-                                                            </td>
-                                                        </tr>
+                                                        <tr><td colSpan="3" className="py-8 text-center text-stone-400">해당 권역에 배정된 하차지가 없습니다.</td></tr>
                                                     )}
                                                 </tbody>
                                             </table>
                                         </div>
                                     )}
 
-                                    {/* 뷰 모드 2: 체크한 애들만 보는 목록형 뷰 */}
                                     {activeDoc && deliveryViewMode === 'checked_list' && (
                                         <div className="space-y-2.5">
                                             {checkedFilteredRows.length === 0 ? (
-                                                <div className="bg-[#fffdfa] rounded-[24px] p-10 text-center border border-[#e6dfd5] text-stone-400 text-xs font-medium">
-                                                    <Icon name="check-circle-2" size={32} className="mx-auto mb-2 opacity-30" />
+                                                <div className="bg-[#fffdfa] rounded-[24px] p-10 text-center border border-[#e6dfd5] text-stone-400 text-xs">
                                                     아직 체크한 하차지가 없습니다.<br/>[전체 선택 표]에서 내가 돌린 곳을 체크해 주세요.
                                                 </div>
                                             ) : (
                                                 checkedFilteredRows.map((row, idx) => (
-                                                    <div
-                                                        key={row.origIdx}
-                                                        className="bg-[#fffdfa] p-4 rounded-2xl shadow-sm border border-[#e6dfd5] flex justify-between items-center"
-                                                    >
+                                                    <div key={row.origIdx} className="bg-[#fffdfa] p-4 rounded-2xl shadow-sm border border-[#e6dfd5] flex justify-between items-center">
                                                         <div className="min-w-0 pr-3">
                                                             <div className="flex items-center space-x-1.5 mb-1">
-                                                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-stone-800 text-amber-300">
-                                                                    #{idx + 1}
-                                                                </span>
-                                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#f4eee4] text-stone-600">
-                                                                    {row.resolvedRegion}
-                                                                </span>
-                                                                {row.isSplit && (
-                                                                    <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800">
-                                                                        절반
-                                                                    </span>
-                                                                )}
+                                                                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-stone-800 text-amber-300">#{idx + 1}</span>
+                                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#f4eee4] text-stone-600">{row.resolvedRegion}</span>
+                                                                {row.isSplit && <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800">절반</span>}
                                                                 <h4 className="font-extrabold text-sm text-stone-800 truncate">{row.name}</h4>
                                                             </div>
-                                                            <p className="text-[11px] text-stone-500 truncate">
-                                                                {row.address || '주소 정보 없음'}
-                                                            </p>
-                                                            {row.phone && (
-                                                                <p className="text-[11px] text-stone-400 font-medium mt-0.5">{row.phone}</p>
-                                                            )}
+                                                            <p className="text-[11px] text-stone-500 truncate">{row.address || '주소 정보 없음'}</p>
+                                                            {row.phone && <p className="text-[11px] text-stone-400 mt-0.5">{row.phone}</p>}
                                                         </div>
                                                         <div className="flex items-center space-x-2 shrink-0">
                                                             <div className="text-right">
                                                                 <span className="text-lg font-black text-amber-700">{row.mySacksVal}</span>
-                                                                <span className="text-xs font-bold text-stone-600 ml-0.5">
-                                                                    {row.isSplit ? `/${row.totalRowSacks}포` : '포'}
-                                                                </span>
+                                                                <span className="text-xs font-bold text-stone-600 ml-0.5">{row.isSplit ? `/${row.totalRowSacks}포` : '포'}</span>
                                                             </div>
                                                             {row.totalRowSacks >= 2 && (
-                                                                <button
-                                                                    onClick={() => toggleHalfDelivery(activeDoc, row.origIdx)}
-                                                                    className={`px-2 py-2 rounded-xl text-[11px] font-extrabold active:scale-95 transition ${
-                                                                        row.isSplit
-                                                                            ? 'bg-amber-600 text-white'
-                                                                            : 'bg-[#f4eee4] text-stone-700'
-                                                                    }`}
-                                                                >
+                                                                <button onClick={() => toggleHalfDelivery(activeDoc, row.origIdx)} className={`px-2 py-2 rounded-xl text-[11px] font-extrabold ${row.isSplit ? 'bg-amber-600 text-white' : 'bg-[#f4eee4] text-stone-700'}`}>
                                                                     {row.isSplit ? '전체' : '절반'}
                                                                 </button>
                                                             )}
-                                                            <button
-                                                                onClick={() => toggleDeliveryComplete(activeDoc, row.origIdx)}
-                                                                className="bg-[#fdf3f2] hover:bg-[#f9e2e0] text-[#9e3b33] px-2.5 py-2 rounded-xl text-[11px] font-extrabold border border-[#f5d5d2] active:scale-95 transition"
-                                                                title="체크 해지"
-                                                            >
-                                                                해지
-                                                            </button>
+                                                            <button onClick={() => toggleDeliveryComplete(activeDoc, row.origIdx)} className="bg-[#fdf3f2] text-[#9e3b33] px-2.5 py-2 rounded-xl text-[11px] font-extrabold border border-[#f5d5d2]">해지</button>
                                                         </div>
                                                     </div>
                                                 ))
@@ -1634,35 +1769,41 @@
                         {/* 3. 내역조회 탭 */}
                         {activeTab === 'history' && (
                             <div className="space-y-3">
-                                <h2 className="text-base font-extrabold text-stone-800 mb-3 px-1">클라우드 작업 내역</h2>
+                                <h2 className="text-base font-extrabold text-stone-800 mb-2 px-1">클라우드 작업 내역 ({history.length}건)</h2>
                                 {history.length === 0 ? (
                                     <div className="text-center py-12 text-stone-400 bg-[#fffdfa] rounded-[28px] border border-[#e6dfd5]">
-                                        <Icon name="inbox" size={40} className="mx-auto mb-2 opacity-30" />
+                                        <Icon name="inbox" size={36} className="mx-auto mb-2 opacity-30" />
                                         <p className="text-sm font-medium">저장된 내역이 없습니다.</p>
                                     </div>
                                 ) : (
                                     history.map(doc => {
-                                        const doneSacks = doc.data.reduce((a, c) => a + getEffectiveMySacks(c), 0);
+                                        const doneSacks = (doc.data || []).reduce((a, c) => a + getEffectiveMySacks(c), 0);
                                         return (
                                             <div key={doc.id} onClick={() => { setCurrentDoc(doc); setActiveTab('upload'); }} className="bg-[#fffdfa] p-4 rounded-2xl shadow-sm border border-[#e6dfd5] flex justify-between items-center cursor-pointer active:bg-[#f7f4ef] transition">
                                                 <div className="overflow-hidden pr-3">
-                                                    <div className="flex items-center space-x-2 mb-1">
+                                                    <div className="flex items-center space-x-1.5 mb-1">
                                                         <span className="text-[10px] font-bold bg-[#f4eee4] text-stone-700 px-2 py-0.5 rounded-md">{doc.yearMonth}</span>
+                                                        {doc.itemType && <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${doc.itemType === '팥' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>{doc.itemType}</span>}
                                                         <span className="text-[11px] text-stone-400">{doc.uploadDate}</span>
                                                     </div>
                                                     <h4 className="font-bold text-stone-800 text-sm truncate">{doc.fileName}</h4>
-                                                    <p className="text-[11px] text-emerald-700 font-bold mt-1">
-                                                        내가 돌린 수량: {doneSacks}포 / 전체 {doc.totalSacks}포
-                                                    </p>
+                                                    <p className="text-[11px] text-emerald-700 font-bold mt-1">내가 돌린 수량: {doneSacks}포 / 전체 {doc.totalSacks}포</p>
                                                 </div>
-                                                <div className="flex items-center space-x-2 shrink-0">
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); exportToExcel(doc); }} 
-                                                        className="px-3 py-2 bg-[#e3ece6] text-[#2c5e43] rounded-xl hover:bg-[#d5e3da] flex items-center text-xs font-extrabold shadow-sm"
-                                                    >
-                                                        <Icon name="download" size={14} className="mr-1" /> 엑셀다운
+                                                <div className="flex items-center space-x-1.5 shrink-0">
+                                                    <button onClick={(e) => { e.stopPropagation(); exportToExcel(doc, doc.itemType); }} className="px-3 py-2 bg-[#e3ece6] text-[#2c5e43] rounded-xl flex items-center text-xs font-extrabold shadow-sm">
+                                                        <Icon name="download" size={14} className="mr-1" />엑셀
                                                     </button>
-                                                    <button onClick={(e) => deleteHistoryDoc(doc.id, e)} className="p-2 text-stone-400 hover:text-rose-600 rounded-xl">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setConfirmDialog({
+                                                                title: '작업 내역 삭제',
+                                                                message: `'${doc.fileName}' 내역을 삭제할까요?`,
+                                                                onConfirm: () => deleteHistoryDoc(doc.id)
+                                                            });
+                                                        }}
+                                                        className="p-2 text-stone-400 hover:text-rose-600 rounded-xl"
+                                                    >
                                                         <Icon name="trash-2" size={16} />
                                                     </button>
                                                 </div>
@@ -1677,10 +1818,10 @@
                         {activeTab === 'stats' && (
                             <div className="space-y-4">
                                 <div className="flex space-x-2 bg-[#fffdfa] p-3 rounded-2xl shadow-sm border border-[#e6dfd5]">
-                                    <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="flex-1 bg-[#f7f4ef] border-none rounded-xl text-sm font-bold text-stone-700 py-2.5 px-3 outline-none">
+                                    <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="flex-1 bg-[#f7f4ef] rounded-xl text-sm font-bold text-stone-700 py-2.5 px-3 outline-none">
                                         {availableYears.map(y => <option key={y} value={y}>{y}년</option>)}
                                     </select>
-                                    <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="flex-1 bg-[#f7f4ef] border-none rounded-xl text-sm font-bold text-stone-700 py-2.5 px-3 outline-none">
+                                    <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="flex-1 bg-[#f7f4ef] rounded-xl text-sm font-bold text-stone-700 py-2.5 px-3 outline-none">
                                         <option value="ALL">전체 (연간 누적)</option>
                                         {Array.from({length: 12}, (_, i) => (i + 1).toString().padStart(2, '0')).map(m => (
                                             <option key={m} value={m}>{parseInt(m)}월</option>
@@ -1688,7 +1829,6 @@
                                     </select>
                                 </div>
 
-                                {/* 전체 통계 + 내가 돌린 갯수 통계 카드 */}
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="bg-stone-800 text-[#fdfbf7] p-5 rounded-[24px] shadow-md">
                                         <p className="text-stone-400 text-[11px] font-bold mb-1">전체 물량 ({filteredStats.docCount}건)</p>
@@ -1704,10 +1844,9 @@
                                     </div>
                                 </div>
 
-                                {/* 권역별 전체 vs 내가 돌린 갯수 비교 */}
                                 <div className="bg-[#fffdfa] p-5 rounded-[28px] shadow-sm border border-[#e6dfd5]">
-                                    <h4 className="font-extrabold text-stone-800 text-xs mb-4 flex items-center justify-between">
-                                        <span className="flex items-center"><Icon name="map-pin" size={16} className="mr-1.5 text-stone-500"/> 권역별 통계 (내가 돌린 갯수 / 전체)</span>
+                                    <h4 className="font-extrabold text-stone-800 text-xs mb-4 flex items-center">
+                                        <Icon name="map-pin" size={15} className="mr-1.5 text-stone-500" /> 권역별 통계 (내가 돌린 갯수 / 전체)
                                     </h4>
                                     <div className="space-y-3.5">
                                         {['제주시', '신제주', '서쪽', '동쪽', '서귀포', '미분류'].map(r => {
@@ -1733,10 +1872,9 @@
                                     </div>
                                 </div>
 
-                                {/* 내가 돌린 업체별 순위 */}
                                 <div className="bg-[#fffdfa] p-5 rounded-[28px] shadow-sm border border-[#e6dfd5]">
                                     <h4 className="font-extrabold text-stone-800 text-xs mb-3 flex items-center">
-                                        <Icon name="check-circle" size={16} className="mr-1.5 text-amber-700"/> 내가 돌린 하차지 내역 ({filteredStats.myCompletedCompanies.length}곳)
+                                        <Icon name="check-circle" size={15} className="mr-1.5 text-amber-700" /> 내가 돌린 하차지 내역 ({filteredStats.myCompletedCompanies.length}곳)
                                     </h4>
                                     {filteredStats.myCompletedCompanies.length === 0 ? (
                                         <p className="text-xs text-stone-400 py-4 text-center">체크된 하차 완료 내역이 없습니다.</p>
@@ -1757,17 +1895,16 @@
                             </div>
                         )}
 
-                        {/* 5. 하차지 목록 탭 */}
+                        {/* 5. 하차지 목록 탭 (검색창 + 개별 삭제 + 1회 쓰기 동기화) */}
                         {activeTab === 'regions' && (
                             <div className="space-y-4">
-                                {/* 명단 엑셀 일괄 업로드 박스 */}
                                 <div className="bg-[#eef5f0] p-4 rounded-[24px] shadow-sm border border-[#cde0d3]">
                                     <h3 className="text-xs font-extrabold text-[#2c5e43] mb-1 flex items-center">
                                         <Icon name="file-spreadsheet" size={16} className="mr-1.5" />
-                                        떡집명단 엑셀 일괄 동기화 ('떡집 주소' 시트)
+                                        떡집명단 엑셀 일괄 동기화 (초절약 1회 저장)
                                     </h3>
                                     <p className="text-[11px] text-[#457359] mb-3 leading-relaxed">
-                                        가지고 계신 <b>떡집명단_최종.xlsx</b> 파일을 올리시면 '떡집 주소' 시트의 상호·대표자·주소·전화번호가 한 번에 정확히 입력됩니다.
+                                        <b>떡집명단_최종.xlsx</b> 파일을 올리시면 모든 명단을 문서 1개에 압축 저장해 무료 한도를 아끼면서 동기화합니다.
                                     </p>
                                     <label className="block w-full bg-[#3b6e52] hover:bg-[#2f5942] text-white text-center font-bold py-2.5 rounded-xl text-xs cursor-pointer transition active:scale-95 shadow-sm">
                                         📂 떡집명단 엑셀 파일 올리기
@@ -1776,12 +1913,14 @@
                                 </div>
 
                                 <div className="bg-[#fffdfa] p-4 rounded-[24px] shadow-sm border border-[#e6dfd5]">
-                                    <h3 className="text-xs font-extrabold text-stone-700 mb-2.5 flex items-center"><Icon name="plus-circle" /><span className="ml-1.5">신규/수정 하차지 개별 등록</span></h3>
+                                    <h3 className="text-xs font-extrabold text-stone-700 mb-2.5 flex items-center">
+                                        <Icon name="plus-circle" size={16} className="mr-1.5" />신규/수정 하차지 개별 등록
+                                    </h3>
                                     <form onSubmit={addRegion} className="space-y-2">
                                         <div className="flex gap-2">
-                                            <input type="text" placeholder="상호명 (필수)" value={newCompName} onChange={e=>setNewCompName(e.target.value)} className="flex-1 min-w-0 bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2.5 text-xs font-medium outline-none focus:bg-white focus:border-stone-500"/>
-                                            <input type="text" placeholder="대표자" value={newCompRep} onChange={e=>setNewCompRep(e.target.value)} className="w-20 bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2.5 text-xs font-medium outline-none focus:bg-white focus:border-stone-500"/>
-                                            <select value={newCompRegion} onChange={e=>setNewCompRegion(e.target.value)} className="shrink-0 bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2.5 text-xs font-bold text-stone-700 outline-none">
+                                            <input type="text" placeholder="상호명 (필수)" value={newCompName} onChange={e=>setNewCompName(e.target.value)} className="flex-1 min-w-0 bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2 text-xs font-medium outline-none focus:bg-white focus:border-stone-500"/>
+                                            <input type="text" placeholder="대표자" value={newCompRep} onChange={e=>setNewCompRep(e.target.value)} className="w-20 bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2 text-xs font-medium outline-none focus:bg-white focus:border-stone-500"/>
+                                            <select value={newCompRegion} onChange={e=>setNewCompRegion(e.target.value)} className="shrink-0 bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-2.5 py-2 text-xs font-bold text-stone-700 outline-none">
                                                 <option value="제주시">제주시</option>
                                                 <option value="신제주">신제주</option>
                                                 <option value="서쪽">서쪽</option>
@@ -1790,27 +1929,44 @@
                                             </select>
                                         </div>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <input type="text" placeholder="주소 입력" value={newCompAddress} onChange={e=>setNewCompAddress(e.target.value)} className="w-full bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2.5 text-xs outline-none focus:bg-white focus:border-stone-500"/>
-                                            <input type="text" placeholder="전화번호 입력" value={newCompPhone} onChange={e=>setNewCompPhone(e.target.value)} className="w-full bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2.5 text-xs outline-none focus:bg-white focus:border-stone-500"/>
+                                            <input type="text" placeholder="주소 입력" value={newCompAddress} onChange={e=>setNewCompAddress(e.target.value)} className="w-full bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2 text-xs outline-none focus:bg-white focus:border-stone-500"/>
+                                            <input type="text" placeholder="전화번호 입력" value={newCompPhone} onChange={e=>setNewCompPhone(e.target.value)} className="w-full bg-[#f7f4ef] border border-[#d6cec2] rounded-xl px-3 py-2 text-xs outline-none focus:bg-white focus:border-stone-500"/>
                                         </div>
                                         <button type="submit" className="w-full bg-stone-700 text-white py-2.5 rounded-xl text-xs font-bold active:scale-95 transition shadow-sm">하차지 저장</button>
                                     </form>
                                 </div>
 
                                 <div className="bg-[#fffdfa] rounded-[24px] shadow-sm border border-[#e6dfd5] overflow-hidden">
-                                    <div className="px-5 py-3.5 bg-[#f4eee4]/60 border-b border-[#e6dfd5] font-extrabold text-stone-700 text-xs flex justify-between items-center">
-                                        <span>등록된 하차지 목록</span>
-                                        <span className="bg-[#ede8df] text-stone-700 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold">{Object.keys(masterData).length}곳</span>
+                                    <div className="px-4 py-3 bg-[#f4eee4]/60 border-b border-[#e6dfd5] space-y-2">
+                                        <div className="font-extrabold text-stone-700 text-xs flex justify-between items-center">
+                                            <span>등록된 하차지 목록 (가나다순)</span>
+                                            <span className="bg-[#ede8df] text-stone-700 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold">{filteredMasterEntries.length} / {Object.keys(masterData).length}곳</span>
+                                        </div>
+                                        <div className="relative">
+                                            <Icon name="search" size={14} className="absolute left-3 top-2.5 text-stone-400" />
+                                            <input
+                                                type="text"
+                                                value={regionSearch}
+                                                onChange={(e) => setRegionSearch(e.target.value)}
+                                                placeholder="상호명, 대표자, 권역, 주소 검색..."
+                                                className="w-full bg-white border border-[#d6cec2] rounded-xl pl-8 pr-3 py-1.5 text-xs outline-none focus:border-stone-500"
+                                            />
+                                        </div>
                                     </div>
                                     <div className="max-h-[340px] overflow-y-auto divide-y divide-[#f4eee4] px-2">
-                                        {Object.keys(masterData).length === 0 ? (
+                                        {filteredMasterEntries.length === 0 ? (
                                             <div className="py-10 text-center text-xs text-stone-400 leading-relaxed">
-                                                등록된 하차지 명단이 없습니다.<br/>
-                                                위 초록색 버튼으로 <b>떡집명단 엑셀 파일</b>을 올려주세요.
+                                                {Object.keys(masterData).length === 0
+                                                    ? <>등록된 하차지 명단이 없습니다.<br/>위 초록색 버튼으로 <b>떡집명단 엑셀 파일</b>을 올려주세요.</>
+                                                    : '검색 결과가 없습니다.'}
                                             </div>
                                         ) : (
-                                            Object.entries(masterData).map(([name, info], idx) => (
-                                                <div key={idx} onClick={() => { setNewCompName(name); setNewCompRep(info.rep||''); setNewCompRegion(info.region); setNewCompAddress(info.address||''); setNewCompPhone(info.phone||''); }} className="px-3 py-3 flex justify-between items-center hover:bg-[#f7f4ef] rounded-xl cursor-pointer">
+                                            filteredMasterEntries.map(([name, info]) => (
+                                                <div
+                                                    key={name}
+                                                    onClick={() => { setNewCompName(name); setNewCompRep(info.rep||''); setNewCompRegion(info.region); setNewCompAddress(info.address||''); setNewCompPhone(info.phone||''); }}
+                                                    className="px-2.5 py-2.5 flex justify-between items-center hover:bg-[#f7f4ef] rounded-xl cursor-pointer"
+                                                >
                                                     <div className="min-w-0 pr-2">
                                                         <div className="text-xs font-bold text-stone-800">
                                                             {name} {info.rep ? <span className="text-[11px] font-semibold text-stone-500">({info.rep})</span> : null}
@@ -1819,7 +1975,23 @@
                                                             {info.address || '주소미입력'} · {info.phone || '번호미입력'}
                                                         </div>
                                                     </div>
-                                                    <span className="shrink-0 text-[11px] px-2.5 py-1 bg-[#ede8df] text-stone-600 rounded-full font-bold">{info.region}</span>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <span className="text-[10px] px-2 py-0.5 bg-[#ede8df] text-stone-600 rounded-full font-bold">{info.region}</span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setConfirmDialog({
+                                                                    title: '하차지 삭제',
+                                                                    message: `'${name}' 업체를 명단에서 삭제할까요?`,
+                                                                    onConfirm: () => deleteRegionItem(name)
+                                                                });
+                                                            }}
+                                                            className="p-1.5 text-stone-400 hover:text-rose-600 rounded-lg"
+                                                        >
+                                                            <Icon name="trash-2" size={14} />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             ))
                                         )}
@@ -1830,7 +2002,7 @@
                     </main>
 
                     {/* 하단 탭 바 (5개 탭) */}
-                    <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-[#fffdfa]/95 backdrop-blur-md border-t border-[#e6dfd5] flex justify-around py-2 px-1 z-20 rounded-t-[24px] shadow-lg">
+                    <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-[#fffdfa]/95 backdrop-blur-md border-t border-[#e6dfd5] flex justify-around pt-2 px-1 safe-nav z-20 rounded-t-[24px] shadow-lg">
                         {[
                             { id: 'upload', icon: 'upload-cloud', label: '업로드' },
                             { id: 'my_delivery', icon: 'check-square', label: '나의 하차지' },
@@ -1843,7 +2015,7 @@
                                 onClick={() => setActiveTab(tab.id)} 
                                 className={`flex flex-col items-center py-1 px-2 rounded-xl transition ${activeTab === tab.id ? 'text-stone-900 font-extrabold scale-105' : 'text-stone-400 font-medium hover:text-stone-600'}`}
                             >
-                                <Icon name={tab.icon} size={19} className={activeTab === tab.id ? 'stroke-[2.5px] text-amber-800' : 'stroke-[1.5px]'} />
+                                <Icon name={tab.icon} size={19} className={activeTab === tab.id ? 'text-amber-800' : ''} />
                                 <span className="text-[10px] mt-1 tracking-tight">{tab.label}</span>
                             </button>
                         ))}
