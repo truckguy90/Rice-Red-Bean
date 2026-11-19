@@ -609,75 +609,30 @@
                 showToast(status ? `${targetIndices.length}곳 일괄 체크 완료!` : `${targetIndices.length}곳 체크 해지 완료!`, "success");
             };
 
-            const toggleDeliveryComplete = async (docObj, rowIndex) => {
-                if (!docObj) return;
-                const updatedData = docObj.data.map((item, idx) => {
-                    if (idx === rowIndex) {
-                        return { ...item, completed: !item.completed };
-                    }
-                    return item;
-                });
-
-                const updatedDoc = { ...docObj, data: updatedData };
-                if (currentDoc && currentDoc.id === docObj.id) {
-                    setCurrentDoc(updatedDoc);
+            const deleteHistoryDoc = async (docId, e) => {
+                if (e) e.stopPropagation();
+                if (currentDoc && currentDoc.id === docId) {
+                    setCurrentDoc(null);
                 }
-                setHistory(prev => prev.map(h => h.id === docObj.id ? updatedDoc : h));
+                setHistory(prev => {
+                    const next = prev.filter(h => h.id !== docId);
+                    if (selectedDeliveryDocId === docId) {
+                        setSelectedDeliveryDocId(next.length > 0 ? next[0].id : '');
+                    }
+                    return next;
+                });
 
                 if (user && fbApi) {
                     try {
-                        const { db, doc, setDoc } = fbApi;
-                        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', docObj.id);
-                        await setDoc(docRef, {
-                            fileName: updatedDoc.fileName,
-                            yearMonth: updatedDoc.yearMonth,
-                            uploadDate: updatedDoc.uploadDate,
-                            timestamp: updatedDoc.timestamp,
-                            totalSacks: updatedDoc.totalSacks,
-                            unclassifiedCount: updatedDoc.unclassifiedCount,
-                            recordsJson: JSON.stringify(updatedData)
-                        });
-                    } catch (e) {
-                        console.error("Update complete error:", e);
-                    }
-                }
-            };
-
-            const setBulkDeliveryComplete = async (docObj, targetIndices, status) => {
-                if (!docObj || !targetIndices || targetIndices.length === 0) return;
-                const idxSet = new Set(targetIndices);
-                const updatedData = docObj.data.map((item, idx) => {
-                    if (idxSet.has(idx)) {
-                        return { ...item, completed: status };
-                    }
-                    return item;
-                });
-
-                const updatedDoc = { ...docObj, data: updatedData };
-                if (currentDoc && currentDoc.id === docObj.id) {
-                    setCurrentDoc(updatedDoc);
-                }
-                setHistory(prev => prev.map(h => h.id === docObj.id ? updatedDoc : h));
-
-                if (user && fbApi) {
-                    try {
-                        const { db, doc, setDoc } = fbApi;
-                        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'history', docObj.id);
-                        await setDoc(docRef, {
-                            fileName: updatedDoc.fileName,
-                            yearMonth: updatedDoc.yearMonth,
-                            uploadDate: updatedDoc.uploadDate,
-                            timestamp: updatedDoc.timestamp,
-                            totalSacks: updatedDoc.totalSacks,
-                            unclassifiedCount: updatedDoc.unclassifiedCount,
-                            recordsJson: JSON.stringify(updatedData)
-                        });
-                        showToast(status ? `${targetIndices.length}곳 일괄 체크 완료!` : `${targetIndices.length}곳 체크 해지 완료!`, "success");
-                    } catch (e) {
-                        console.error("Bulk update error:", e);
+                        const { db, doc, deleteDoc } = fbApi;
+                        await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'history', docId));
+                        showToast("내역이 삭제되었습니다.", "success");
+                    } catch (err) {
+                        console.error("Delete history error:", err);
+                        showToast("삭제 중 오류가 발생했습니다.", "error");
                     }
                 } else {
-                    showToast(status ? `${targetIndices.length}곳 일괄 체크 완료!` : `${targetIndices.length}곳 체크 해지 완료!`, "success");
+                    showToast("내역이 삭제되었습니다.", "success");
                 }
             };
 
