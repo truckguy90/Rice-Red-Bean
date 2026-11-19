@@ -241,43 +241,6 @@
 
             useEffect(() => {
                 if (!user || !fbApi) return;
-                const { db, collection, doc, setDoc, onSnapshot } = fbApi;
-                
-                const regionsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'regions');
-                const unsubscribe = onSnapshot(regionsRef, (snapshot) => {
-                    if (snapshot.empty) {
-                        Object.entries(initialMasterData).forEach(([name, info]) => {
-                            const docRef = doc(regionsRef, name);
-                            setDoc(docRef, { name, ...info });
-                        });
-                    } else {
-                        const existingDocs = {};
-                        snapshot.forEach(docSnap => {
-                            const data = docSnap.data();
-                            existingDocs[data.name] = data;
-                        });
-
-                        const merged = { ...initialMasterData };
-                        Object.keys(existingDocs).forEach(key => {
-                            const d = existingDocs[key];
-                            const initInfo = initialMasterData[key];
-                            const isOldShortAddress = !d.address || ["서귀포시", "제주시", "제주시 조천읍 함덕리", "서귀포시 중정로"].includes(String(d.address).trim());
-                            merged[key] = {
-                                region: (d.region && d.region !== "미분류") ? d.region : (initInfo ? initInfo.region : "미분류"),
-                                rep: d.rep || (initInfo ? initInfo.rep : ""),
-                                address: (isOldShortAddress && initInfo && initInfo.address) ? initInfo.address : (d.address || (initInfo ? initInfo.address : "")),
-                                phone: d.phone || (initInfo ? initInfo.phone : "")
-                            };
-                        });
-
-                        setMasterData(merged);
-                    }
-                }, (error) => console.error("Regions sync error:", error));
-                return () => unsubscribe();
-            }, [user, fbApi]);
-
-            useEffect(() => {
-                if (!user || !fbApi) return;
                 const { db, collection, onSnapshot } = fbApi;
                 
                 const regionsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'regions');
@@ -301,6 +264,9 @@
             }, [user, fbApi]);
 
             useEffect(() => {
+                if (!user || !fbApi) return;
+                const { db, collection, onSnapshot } = fbApi;
+
                 const historyRef = collection(db, 'artifacts', appId, 'users', user.uid, 'history');
                 const unsubscribe = onSnapshot(historyRef, (snapshot) => {
                     const loadedHistory = [];
@@ -1181,7 +1147,7 @@
                                     <div className="bg-[#fffdfa] p-4 rounded-[24px] shadow-sm border border-[#e6dfd5] space-y-3">
                                         <div className="flex items-center justify-between">
                                             <span className="text-xs font-extrabold text-stone-700 flex items-center">
-                                                <Icon name="file-Spreadsheet" size={15} className="mr-1.5 text-amber-700" />
+                                                <Icon name="file-spreadsheet" size={15} className="mr-1.5 text-amber-700" />
                                                 작업할 내역서 선택
                                             </span>
                                             <span className="text-[11px] text-stone-400 font-bold">체크 시 자동 저장</span>
