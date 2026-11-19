@@ -58,127 +58,9 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // 118곳 전체 기본 마스터 데이터 (초기 권역 및 연락처 베이스)
-        const initialMasterData = {
-            "건입떡집": { region: "제주시", rep: "김군", address: "", phone: "010-9487-5889" },
-            "고향떡집": { region: "제주시", rep: "윤순심", address: "", phone: "010-6693-3160" },
-            "낙원떡방아": { region: "제주시", rep: "홍기범", address: "", phone: "010-4690-2605" },
-            "낙원떡방아(동문)": { region: "제주시", rep: "좌금희", address: "", phone: "010-3639-3628" },
-            "남광떡집": { region: "제주시", rep: "이경훈", address: "", phone: "010-2691-5976" },
-            "남문떡방앗간": { region: "동쪽", rep: "김명자", address: "제주시 구좌읍 김녕남6길 5", phone: "010-2690-4636" },
-            "남원떡집": { region: "동쪽", rep: "이희철", address: "서귀포시 남원읍 남원체육관로 318 남원떡집", phone: "010-3694-5030" },
-            "대성떡방앗간": { region: "서귀포", rep: "김민선", address: "", phone: "010-3692-8263" },
-            "대정떡집": { region: "서쪽", rep: "최영현", address: "", phone: "010-4199-4854" },
-            "대정중앙떡방앗간": { region: "서쪽", rep: "한윤철", address: "", phone: "010-4696-0496" },
-            "대정하모떡집": { region: "서쪽", rep: "박근수", address: "", phone: "010-5777-6341" },
-            "도남떡집": { region: "제주시", rep: "이은희", address: "", phone: "010-6211-3848" },
-            "도남오거리떡방앗간": { region: "제주시", rep: "강희윤", address: "", phone: "010-3367-8880" },
-            "도두떡집": { region: "신제주", rep: "권나예", address: "", phone: "010-9890-8858" },
-            "동귀떡방앗간": { region: "서쪽", rep: "현상훈", address: "", phone: "010-6691-3011" },
-            "동문떡방": { region: "제주시", rep: "이금옥", address: "", phone: "010-5559-2950" },
-            "동백떡집": { region: "제주시", rep: "이현우", address: "", phone: "010-4690-4077" },
-            "두손떡집": { region: "동쪽", rep: "송임자", address: "서귀포시 표선면 표선관정로104번길 1", phone: "010-3087-0468" },
-            "떡마을": { region: "신제주", rep: "정현숙", address: "", phone: "010-4693-7920" },
-            "떡마을(서귀)": { region: "서귀포", rep: "현미령", address: "", phone: "010-9555-6353" },
-            "떡방동행": { region: "제주시", rep: "양복현", address: "", phone: "010-4595-5606" },
-            "떡보의하루(서귀)": { region: "서귀포", rep: "장진희", address: "", phone: "010-9138-4144" },
-            "떡보의하루": { region: "제주시", rep: "김철구", address: "", phone: "010-4587-7979" },
-            "떡하니": { region: "신제주", rep: "김은정", address: "", phone: "010-3692-5054" },
-            "마실": { region: "제주시", rep: "정솔", address: "", phone: "010-4991-1352" },
-            "만민": { region: "제주시", rep: "이상준", address: "", phone: "010-4983-2026" },
-            "명가떡사랑": { region: "제주시", rep: "진석민", address: "", phone: "010-7449-6708" },
-            "명당떡집": { region: "제주시", rep: "홍성만", address: "", phone: "010-3412-3532" },
-            "명당떡집용담점": { region: "제주시", rep: "한군섭", address: "", phone: "010-6745-2080" },
-            "명당양과구남점": { region: "제주시", rep: "홍인옥", address: "", phone: "010-3692-4601" },
-            "명류당": { region: "신제주", rep: "양문혁", address: "", phone: "010-8244-1855" },
-            "명성떡방앗간": { region: "동쪽", rep: "배재석", address: "서귀포시 표선면 표선중앙로90번길 1", phone: "010-3814-2684" },
-            "명원가": { region: "신제주", rep: "김현정", address: "", phone: "010-6726-2285" },
-            "미도": { region: "제주시", rep: "홍정운", address: "", phone: "010-9840-1146" },
-            "미듬민속떡집": { region: "제주시", rep: "이미자", address: "", phone: "010-9449-2594" },
-            "민영이네떡방아": { region: "서귀포", rep: "김민균", address: "", phone: "010-7673-1661" },
-            "민희방앗간": { region: "서쪽", rep: "김효순", address: "", phone: "010-2699-1433" },
-            "반석떡집": { region: "제주시", rep: "김진숙", address: "", phone: "010-7662-2697" },
-            "부민떡방아": { region: "서귀포", rep: "고영희", address: "", phone: "010-3558-2630" },
-            "부자떡집": { region: "신제주", rep: "강영희", address: "", phone: "010-3602-8245" },
-            "산양떡방앗간": { region: "서귀포", rep: "고봉석", address: "", phone: "010-5171-5289" },
-            "삼다도떡집": { region: "제주시", rep: "오태일", address: "", phone: "010-8893-8923" },
-            "새서울떡집": { region: "제주시", rep: "박명숙", address: "", phone: "010-5758-6002" },
-            "서귀떡방아": { region: "서귀포", rep: "박은숙", address: "서귀포시 중앙로62번길 13", phone: "010-3691-9359" },
-            "서사라": { region: "제주시", rep: "김유경", address: "", phone: "010-4665-2188" },
-            "서우봉떡집": { region: "동쪽", rep: "김선조", address: "제주시 조천읍 신북로 504", phone: "010-4086-7833" },
-            "섬나라오메기": { region: "신제주", rep: "현승철", address: "", phone: "010-3375-4545" },
-            "성도떡집": { region: "신제주", rep: "고경대", address: "", phone: "010-9536-3339" },
-            "세진방앗간": { region: "동쪽", rep: "이정엽", address: "", phone: "010-2689-2318" },
-            "소망떡집": { region: "제주시", rep: "이기영", address: "", phone: "010-2730-1238" },
-            "소민떡방": { region: "제주시", rep: "심지현", address: "", phone: "010-3347-2508" },
-            "수가성오메기떡": { region: "제주시", rep: "정영준", address: "", phone: "010-6655-8562" },
-            "수다뜰떡방": { region: "신제주", rep: "최영심", address: "", phone: "010-8660-1476" },
-            "수라간떡방": { region: "신제주", rep: "고수현", address: "", phone: "010-3459-9882" },
-            "수빈떡방앗간": { region: "신제주", rep: "고화열", address: "", phone: "010-7270-0389" },
-            "시장떡집": { region: "서쪽", rep: "최정현", address: "", phone: "010-3418-6243" },
-            "신광떡집": { region: "신제주", rep: "양영생", address: "", phone: "010-3692-3979" },
-            "신선떡방앗간": { region: "제주시", rep: "김승일", address: "", phone: "010-3637-1919" },
-            "신성떡집": { region: "제주시", rep: "김정애", address: "", phone: "010-3816-9909" },
-            "신촌떡방앗간": { region: "동쪽", rep: "장영진", address: "", phone: "010-5162-1400" },
-            "아리랑떡방": { region: "제주시", rep: "홍문표", address: "", phone: "010-6691-1991" },
-            "여진떡집": { region: "서쪽", rep: "김영주", address: "", phone: "010-4709-2647" },
-            "예담떡집": { region: "서귀포", rep: "조광래", address: "서귀포시 신서귀로97번길 22", phone: "010-6483-8909" },
-            "오라떡집": { region: "제주시", rep: "유창선", address: "", phone: "010-7179-3321" },
-            "오메기점빵": { region: "서귀포", rep: "송승환", address: "서귀포시 일주동로 8559", phone: "010-8629-3298" },
-            "오돌또기오메기떡": { region: "제주시", rep: "강정생", address: "", phone: "010-4692-9201" },
-            "오물오물오메기떡": { region: "제주시", rep: "강정생", address: "", phone: "010-4692-9201" },
-            "오복떡방앗간": { region: "서귀포", rep: "박영국", address: "서귀포시 중앙로48번길 29", phone: "010-3697-7591" },
-            "오일장떡집": { region: "신제주", rep: "정무석", address: "", phone: "010-8632-4554" },
-            "외도오복떡집": { region: "서쪽", rep: "진계선", address: "", phone: "010-3969-0087" },
-            "용담떡방앗간": { region: "제주시", rep: "고정생", address: "", phone: "010-9838-5128" },
-            "용문떡방": { region: "제주시", rep: "홍선희", address: "", phone: "010-9840-9493" },
-            "우리떡방(동남)": { region: "동쪽", rep: "김미영", address: "", phone: "010-8662-3061" },
-            "우리떡방앗간(함덕)": { region: "동쪽", rep: "이복자", address: "", phone: "010-8661-1885" },
-            "원당떡집": { region: "제주시", rep: "김경민", address: "", phone: "010-4755-3310" },
-            "원조함덕떡방앗간": { region: "동쪽", rep: "김연희", address: "제주시 조천읍 함덕19길 1", phone: "010-2698-8952" },
-            "원조함덕떡집": { region: "동쪽", rep: "김연희", address: "제주시 조천읍 함덕19길 1", phone: "010-2698-8952" },
-            "웰빙제주보리떡": { region: "제주시", rep: "이정숙", address: "", phone: "010-4114-4589" },
-            "은성떡방앗간": { region: "신제주", rep: "양인추", address: "", phone: "010-3698-2501" },
-            "익섬떡방앗간": { region: "서쪽", rep: "김평대", address: "", phone: "010-3699-2669" },
-            "인화떡방앗간": { region: "제주시", rep: "진석범", address: "", phone: "010-3698-1428" },
-            "일일참": { region: "서귀포", rep: "서윤희", address: "", phone: "010-8611-4975" },
-            "장인오메기": { region: "제주시", rep: "김황균", address: "", phone: "010-3698-4400" },
-            "저지떡방앗간": { region: "서쪽", rep: "홍기량", address: "", phone: "010-2690-0676" },
-            "정담오메기떡": { region: "서귀포", rep: "최정일", address: "서귀포시 중산간동로 7941", phone: "010-9593-4656" },
-            "제일떡방앗간": { region: "신제주", rep: "현기동", address: "", phone: "010-3697-1334" },
-            "제주곱딱": { region: "신제주", rep: "장지연", address: "", phone: "010-7158-9559" },
-            "제주기정떡": { region: "신제주", rep: "한동진", address: "", phone: "010-2768-7615" },
-            "제주떡고을": { region: "신제주", rep: "양순화", address: "", phone: "010-2698-3434" },
-            "제주민속떡집": { region: "제주시", rep: "강명철", address: "", phone: "010-3694-6778" },
-            "제주백록오메기": { region: "제주시", rep: "허성익", address: "", phone: "010-4690-3842" },
-            "제주올레떡집": { region: "제주시", rep: "이테레사", address: "", phone: "010-2736-9365" },
-            "제주촘오메기": { region: "제주시", rep: "이성자", address: "", phone: "010-9940-1759" },
-            "제주탐나오메기떡": { region: "제주시", rep: "설진선", address: "", phone: "010-9897-3197" },
-            "제주할망오메기떡": { region: "서쪽", rep: "길민정", address: "", phone: "010-6778-2634" },
-            "주공떡방아간": { region: "서귀포", rep: "김창호", address: "", phone: "010-5762-2489" },
-            "주니네오메기떡(한라궁)": { region: "서귀포", rep: "김태임", address: "서귀포시 동홍중앙로52번길 20", phone: "010-3825-6692" },
-            "㈜범주 동서남북떡": { region: "제주시", rep: "정명숙", address: "", phone: "010-6204-1514" },
-            "(주)범주 동서남북떡": { region: "제주시", rep: "정명숙", address: "", phone: "010-6204-1514" },
-            "중문떡집": { region: "서귀포", rep: "최은심", address: "", phone: "010-2978-5000" },
-            "중정로떡방아": { region: "서귀포", rep: "고성일", address: "서귀포시 중정로91번길 33-1", phone: "010-7768-4377" },
-            "코시롱돌코롬": { region: "제주시", rep: "윤준수", address: "", phone: "010-6670-3423" },
-            "콩떡": { region: "제주시", rep: "양동효", address: "", phone: "010-3017-0567" },
-            "큰일떡방아": { region: "제주시", rep: "김차근", address: "", phone: "010-3693-7990" },
-            "평화떡집": { region: "서귀포", rep: "김영웅", address: "", phone: "010-9664-6937" },
-            "풍년떡집": { region: "서귀포", rep: "김인순", address: "", phone: "010-6620-0081" },
-            "하귀떡방앗간": { region: "서쪽", rep: "허양순", address: "", phone: "010-5020-8778" },
-            "하르방떡방": { region: "서쪽", rep: "김재용", address: "", phone: "010-3698-0888" },
-            "한림우리떡방앗간": { region: "서쪽", rep: "조근호", address: "", phone: "010-7432-3150" },
-            "한마음떡집": { region: "제주시", rep: "고영우", address: "", phone: "010-4699-8677" },
-            "한일": { region: "신제주", rep: "고석봉", address: "", phone: "010-9840-2901" },
-            "한천떡집": { region: "제주시", rep: "고유일", address: "", phone: "010-3690-3007" },
-            "해당섬오메기떡방": { region: "제주시", rep: "김성욱", address: "", phone: "010-4696-0459" },
-            "해맑은떡방": { region: "신제주", rep: "송하정", address: "", phone: "010-2699-6468" },
-            "행복한떡방": { region: "제주시", rep: "김연신", address: "", phone: "010-8156-3380" },
-            "현대떡집": { region: "신제주", rep: "차재엽", address: "", phone: "010-4507-5020" },
-            "혜성떡방아": { region: "서귀포", rep: "현순옥", address: "서귀포시 중정로91번길 19", phone: "010-3119-7189" },
-            "화북떡집": { region: "제주시", rep: "문지영", address: "", phone: "010-3994-4492" }
-        };
+        // 기본 마스터 데이터 초기화 (임의 데이터 완전 제거 — [하차지 목록]에서 명단 엑셀 업로드로만 관리)
+        const initialMasterData = {};
+        const LOCAL_MASTER_KEY = 'rice_red_bean_master_v2';
 
         const Icon = ({ name, size = 18, className = "" }) => {
             useEffect(() => {
@@ -193,7 +75,14 @@
             const [fbApi, setFbApi] = useState(null);
             const [appId, setAppId] = useState('default-rice-app');
             
-            const [masterData, setMasterData] = useState(initialMasterData);
+            const [masterData, setMasterData] = useState(() => {
+                try {
+                    const saved = localStorage.getItem(LOCAL_MASTER_KEY);
+                    return saved ? JSON.parse(saved) : initialMasterData;
+                } catch (e) {
+                    return initialMasterData;
+                }
+            });
             const [history, setHistory] = useState([]);
             const [currentDoc, setCurrentDoc] = useState(null);
             const [selectedDeliveryDocId, setSelectedDeliveryDocId] = useState('');
@@ -391,6 +280,27 @@
                 if (!user || !fbApi) return;
                 const { db, collection, onSnapshot } = fbApi;
                 
+                const regionsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'regions');
+                const unsubscribe = onSnapshot(regionsRef, (snapshot) => {
+                    const loaded = {};
+                    snapshot.forEach(docSnap => {
+                        const d = docSnap.data();
+                        if (d && d.name) {
+                            loaded[d.name] = {
+                                region: d.region || "미분류",
+                                rep: d.rep || "",
+                                address: d.address || "",
+                                phone: d.phone || ""
+                            };
+                        }
+                    });
+                    setMasterData(loaded);
+                    try { localStorage.setItem(LOCAL_MASTER_KEY, JSON.stringify(loaded)); } catch (e) {}
+                }, (error) => console.error("Regions sync error:", error));
+                return () => unsubscribe();
+            }, [user, fbApi]);
+
+            useEffect(() => {
                 const historyRef = collection(db, 'artifacts', appId, 'users', user.uid, 'history');
                 const unsubscribe = onSnapshot(historyRef, (snapshot) => {
                     const loadedHistory = [];
@@ -951,7 +861,7 @@
                 if (user && fbApi) {
                     try {
                         const { db, doc, setDoc } = fbApi;
-                        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'regions', name);
+                        const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'regions', name.replace(/\//g, '_'));
                         await setDoc(docRef, newEntry);
                         setNewCompName(''); setNewCompRep(''); setNewCompAddress(''); setNewCompPhone('');
                         showToast(`'${name}' 하차지가 저장되었습니다.`);
@@ -959,9 +869,13 @@
                         console.error("Add region error:", err);
                     }
                 } else {
-                    setMasterData(prev => ({ ...prev, [name]: newEntry }));
+                    setMasterData(prev => {
+                        const next = { ...prev, [name]: newEntry };
+                        try { localStorage.setItem(LOCAL_MASTER_KEY, JSON.stringify(next)); } catch (e) {}
+                        return next;
+                    });
                     setNewCompName(''); setNewCompRep(''); setNewCompAddress(''); setNewCompPhone('');
-                    showToast(`'${name}' 임시 등록 완료.`);
+                    showToast(`'${name}' 로컬 저장 완료.`);
                 }
             };
 
@@ -1008,8 +922,9 @@
                             return;
                         }
 
+                        // 기존 잘못된 데이터를 남기지 않도록 완전히 새 명단 객체로 교체
+                        const newMaster = {};
                         let successCount = 0;
-                        const updatedMaster = { ...masterData };
 
                         for (let i = headerIdx + 1; i < data.length; i++) {
                             const row = data[i];
@@ -1023,29 +938,45 @@
                             const phone = colMap.phone !== undefined && row[colMap.phone] ? String(row[colMap.phone]).trim() : "";
                             const explicitRegion = colMap.region !== undefined && row[colMap.region] ? String(row[colMap.region]).trim() : "";
 
-                            const existingMatch = findSmartMaster(name, rep, phone, address);
-                            let region = explicitRegion || (existingMatch && existingMatch.region && existingMatch.region !== "미분류" ? existingMatch.region : inferRegionByAddress(address));
+                            const region = explicitRegion || inferRegionByAddress(address);
 
-                            const newEntry = {
+                            newMaster[name] = {
                                 name,
-                                rep: rep || (existingMatch ? existingMatch.rep : ""),
+                                rep,
                                 region,
-                                address: address || (existingMatch ? existingMatch.address : ""),
-                                phone: phone || (existingMatch ? existingMatch.phone : "")
+                                address,
+                                phone
                             };
-
-                            updatedMaster[name] = newEntry;
-
-                            if (user && fbApi) {
-                                const { db, doc, setDoc } = fbApi;
-                                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'regions', name);
-                                await setDoc(docRef, newEntry);
-                            }
                             successCount++;
                         }
 
-                        setMasterData(updatedMaster);
-                        showToast(`'${targetSheetName}' 시트에서 ${successCount}곳 주소·대표자 동기화 완료!`, "success");
+                        if (successCount === 0) {
+                            showToast("엑셀에서 불러올 업체 데이터가 없습니다.", "error");
+                            return;
+                        }
+
+                        // 클라우드 연결 시 기존 구버전 문서 삭제 후 새 명단 일괄 반영
+                        if (user && fbApi) {
+                            const { db, doc, setDoc, deleteDoc } = fbApi;
+                            const oldKeys = Object.keys(masterData);
+                            for (const oldName of oldKeys) {
+                                if (!newMaster[oldName]) {
+                                    try {
+                                        await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'regions', oldName.replace(/\//g, '_')));
+                                    } catch (delErr) {
+                                        console.error("Delete old region error:", delErr);
+                                    }
+                                }
+                            }
+                            for (const [name, entry] of Object.entries(newMaster)) {
+                                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'regions', name.replace(/\//g, '_'));
+                                await setDoc(docRef, entry);
+                            }
+                        }
+
+                        setMasterData(newMaster);
+                        try { localStorage.setItem(LOCAL_MASTER_KEY, JSON.stringify(newMaster)); } catch (e) {}
+                        showToast(`'${targetSheetName}' 시트 기준 ${successCount}곳 명단으로 완전 교체 완료!`, "success");
                     } catch (err) {
                         console.error("Master upload error:", err);
                         showToast("엑셀 명단 처리 중 오류가 발생했습니다.", "error");
@@ -1644,19 +1575,26 @@
                                         <span className="bg-[#ede8df] text-stone-700 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold">{Object.keys(masterData).length}곳</span>
                                     </div>
                                     <div className="max-h-[340px] overflow-y-auto divide-y divide-[#f4eee4] px-2">
-                                        {Object.entries(masterData).map(([name, info], idx) => (
-                                            <div key={idx} onClick={() => { setNewCompName(name); setNewCompRep(info.rep||''); setNewCompRegion(info.region); setNewCompAddress(info.address||''); setNewCompPhone(info.phone||''); }} className="px-3 py-3 flex justify-between items-center hover:bg-[#f7f4ef] rounded-xl cursor-pointer">
-                                                <div className="min-w-0 pr-2">
-                                                    <div className="text-xs font-bold text-stone-800">
-                                                        {name} {info.rep ? <span className="text-[11px] font-semibold text-stone-500">({info.rep})</span> : null}
-                                                    </div>
-                                                    <div className="text-[10px] text-stone-400 truncate mt-0.5">
-                                                        {info.address || '주소미입력'} · {info.phone || '번호미입력'}
-                                                    </div>
-                                                </div>
-                                                <span className="shrink-0 text-[11px] px-2.5 py-1 bg-[#ede8df] text-stone-600 rounded-full font-bold">{info.region}</span>
+                                        {Object.keys(masterData).length === 0 ? (
+                                            <div className="py-10 text-center text-xs text-stone-400 leading-relaxed">
+                                                등록된 하차지 명단이 없습니다.<br/>
+                                                위 초록색 버튼으로 <b>떡집명단 엑셀 파일</b>을 올려주세요.
                                             </div>
-                                        ))}
+                                        ) : (
+                                            Object.entries(masterData).map(([name, info], idx) => (
+                                                <div key={idx} onClick={() => { setNewCompName(name); setNewCompRep(info.rep||''); setNewCompRegion(info.region); setNewCompAddress(info.address||''); setNewCompPhone(info.phone||''); }} className="px-3 py-3 flex justify-between items-center hover:bg-[#f7f4ef] rounded-xl cursor-pointer">
+                                                    <div className="min-w-0 pr-2">
+                                                        <div className="text-xs font-bold text-stone-800">
+                                                            {name} {info.rep ? <span className="text-[11px] font-semibold text-stone-500">({info.rep})</span> : null}
+                                                        </div>
+                                                        <div className="text-[10px] text-stone-400 truncate mt-0.5">
+                                                            {info.address || '주소미입력'} · {info.phone || '번호미입력'}
+                                                        </div>
+                                                    </div>
+                                                    <span className="shrink-0 text-[11px] px-2.5 py-1 bg-[#ede8df] text-stone-600 rounded-full font-bold">{info.region}</span>
+                                                </div>
+                                            ))
+                                        )}
                                     </div>
                                 </div>
                             </div>
