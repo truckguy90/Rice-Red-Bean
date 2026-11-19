@@ -627,123 +627,140 @@
                     right: { style: "thin", color: { rgb: "D9D9D9" } }
                 };
 
-                // ==========================================
-                // 시트 1: 지역별 분류 (한 시트에 통합 출력)
-                // ==========================================
-                const s1Data = [];
-                const s1Merges = [];
-                const s1RowTypes = [];
-                const regionsOrder = ['제주시', '신제주', '서쪽', '동쪽', '서귀포', '미분류'];
-                let currentRow = 0;
+                // 권역 그룹별 시트 생성 공통 함수
+                const buildRegionSheet = (regionsList) => {
+                    const sData = [];
+                    const sMerges = [];
+                    const sRowTypes = [];
+                    let currentRow = 0;
 
-                regionsOrder.forEach(regionName => {
-                    const items = recoveredData.filter(d => d.region === regionName);
-                    if (items.length === 0) return;
+                    regionsList.forEach(regionName => {
+                        const items = recoveredData.filter(d => d.region === regionName);
+                        if (items.length === 0) return;
 
-                    // 1. 권역 타이틀 바
-                    s1Data.push([regionName, "", "", "", "", ""]);
-                    s1Merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 5 } });
-                    s1RowTypes.push({ type: 'banner' });
-                    currentRow++;
+                        // 1. 권역 타이틀 바
+                        sData.push([regionName, "", "", "", "", ""]);
+                        sMerges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 5 } });
+                        sRowTypes.push({ type: 'banner' });
+                        currentRow++;
 
-                    // 2. 컬럼 헤더
-                    s1Data.push(["상호", "대표자", "주소", "전화번호", "국산(포)", "미국산(포)"]);
-                    s1RowTypes.push({ type: 'header' });
-                    currentRow++;
+                        // 2. 컬럼 헤더
+                        sData.push(["상호", "대표자", "주소", "전화번호", "국산(포)", "미국산(포)"]);
+                        sRowTypes.push({ type: 'header' });
+                        currentRow++;
 
-                    // 3. 업체 목록
-                    let sumKr = 0;
-                    let sumUs = 0;
-                    items.forEach(item => {
-                        sumKr += (Number(item.sacks) || 0);
-                        sumUs += (Number(item.usSacks) || 0);
-                        s1Data.push([
-                            item.name,
-                            item.rep,
-                            item.address,
-                            item.phone,
-                            item.sacks,
-                            item.usSacks
-                        ]);
-                        s1RowTypes.push({ type: 'data' });
+                        // 3. 업체 목록
+                        let sumKr = 0;
+                        let sumUs = 0;
+                        items.forEach(item => {
+                            sumKr += (Number(item.sacks) || 0);
+                            sumUs += (Number(item.usSacks) || 0);
+                            sData.push([
+                                item.name,
+                                item.rep,
+                                item.address,
+                                item.phone,
+                                item.sacks,
+                                item.usSacks
+                            ]);
+                            sRowTypes.push({ type: 'data' });
+                            currentRow++;
+                        });
+
+                        // 4. 권역 합계 행
+                        sData.push(["", "", "", "합계", sumKr, sumUs]);
+                        sRowTypes.push({ type: 'sum' });
+                        currentRow++;
+
+                        // 5. 빈 줄
+                        sData.push(["", "", "", "", "", ""]);
+                        sRowTypes.push({ type: 'blank' });
                         currentRow++;
                     });
 
-                    // 4. 권역 합계 행
-                    s1Data.push(["", "", "", "합계", sumKr, sumUs]);
-                    s1RowTypes.push({ type: 'sum' });
-                    currentRow++;
+                    if (sData.length === 0) {
+                        sData.push(["해당 권역에 배정된 내역이 없습니다.", "", "", "", "", ""]);
+                        sMerges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } });
+                        sRowTypes.push({ type: 'blank' });
+                    }
 
-                    // 5. 빈 줄
-                    s1Data.push(["", "", "", "", "", ""]);
-                    s1RowTypes.push({ type: 'blank' });
-                    currentRow++;
-                });
+                    const ws = XLSX.utils.aoa_to_sheet(sData);
+                    ws['!merges'] = sMerges;
+                    ws['!cols'] = [
+                        { wch: 24 }, // 상호
+                        { wch: 12 }, // 대표자
+                        { wch: 42 }, // 주소
+                        { wch: 16 }, // 전화번호
+                        { wch: 11 }, // 국산(포)
+                        { wch: 11 }  // 미국산(포)
+                    ];
 
-                const ws1 = XLSX.utils.aoa_to_sheet(s1Data);
-                ws1['!merges'] = s1Merges;
-                ws1['!cols'] = [
-                    { wch: 24 }, // 상호
-                    { wch: 12 }, // 대표자
-                    { wch: 42 }, // 주소
-                    { wch: 16 }, // 전화번호
-                    { wch: 11 }, // 국산(포)
-                    { wch: 11 }  // 미국산(포)
-                ];
+                    const range = XLSX.utils.decode_range(ws['!ref']);
+                    for (let R = range.s.r; R <= range.e.r; ++R) {
+                        const rowInfo = sRowTypes[R] || { type: 'blank' };
+                        for (let C = range.s.c; C <= range.e.c; ++C) {
+                            const addr = XLSX.utils.encode_cell({ r: R, c: C });
+                            if (!ws[addr]) ws[addr] = { t: 's', v: '' };
 
-                const range1 = XLSX.utils.decode_range(ws1['!ref']);
-                for (let R = range1.s.r; R <= range1.e.r; ++R) {
-                    const rowInfo = s1RowTypes[R] || { type: 'blank' };
-                    for (let C = range1.s.c; C <= range1.e.c; ++C) {
-                        const addr = XLSX.utils.encode_cell({ r: R, c: C });
-                        if (!ws1[addr]) ws1[addr] = { t: 's', v: '' };
-
-                        if (rowInfo.type === 'banner') {
-                            ws1[addr].s = {
-                                font: { name: "맑은 고딕", sz: 12, bold: true, color: { rgb: "000000" } },
-                                fill: { fgColor: { rgb: "BDC6D4" } },
-                                alignment: { horizontal: "center", vertical: "center" },
-                                border: borderThin
-                            };
-                        } else if (rowInfo.type === 'header') {
-                            ws1[addr].s = {
-                                font: { name: "맑은 고딕", sz: 11, bold: true, color: { rgb: "FFFFFF" } },
-                                fill: { fgColor: { rgb: "1F3864" } },
-                                alignment: { horizontal: "center", vertical: "center" },
-                                border: borderThin
-                            };
-                        } else if (rowInfo.type === 'data') {
-                            const isSackCol = (C === 4 || C === 5);
-                            ws1[addr].s = {
-                                font: {
-                                    name: "맑은 고딕",
-                                    sz: 11,
-                                    bold: isSackCol,
-                                    color: { rgb: isSackCol ? "C00000" : "000000" }
-                                },
-                                alignment: {
-                                    horizontal: C === 2 ? "left" : "center",
-                                    vertical: "center"
-                                },
-                                border: borderThin
-                            };
-                        } else if (rowInfo.type === 'sum') {
-                            ws1[addr].s = {
-                                font: { name: "맑은 고딕", sz: 11, bold: true, color: { rgb: "000000" } },
-                                fill: { fgColor: { rgb: "FFD93B" } },
-                                alignment: { horizontal: "center", vertical: "center" },
-                                border: borderSummary
-                            };
+                            if (rowInfo.type === 'banner') {
+                                ws[addr].s = {
+                                    font: { name: "맑은 고딕", sz: 12, bold: true, color: { rgb: "000000" } },
+                                    fill: { fgColor: { rgb: "BDC6D4" } },
+                                    alignment: { horizontal: "center", vertical: "center" },
+                                    border: borderThin
+                                };
+                            } else if (rowInfo.type === 'header') {
+                                ws[addr].s = {
+                                    font: { name: "맑은 고딕", sz: 11, bold: true, color: { rgb: "FFFFFF" } },
+                                    fill: { fgColor: { rgb: "1F3864" } },
+                                    alignment: { horizontal: "center", vertical: "center" },
+                                    border: borderThin
+                                };
+                            } else if (rowInfo.type === 'data') {
+                                const isSackCol = (C === 4 || C === 5);
+                                ws[addr].s = {
+                                    font: {
+                                        name: "맑은 고딕",
+                                        sz: 11,
+                                        bold: isSackCol,
+                                        color: { rgb: isSackCol ? "C00000" : "000000" }
+                                    },
+                                    alignment: {
+                                        horizontal: C === 2 ? "left" : "center",
+                                        vertical: "center"
+                                    },
+                                    border: borderThin
+                                };
+                            } else if (rowInfo.type === 'sum') {
+                                ws[addr].s = {
+                                    font: { name: "맑은 고딕", sz: 11, bold: true, color: { rgb: "000000" } },
+                                    fill: { fgColor: { rgb: "FFD93B" } },
+                                    alignment: { horizontal: "center", vertical: "center" },
+                                    border: borderSummary
+                                };
+                            }
                         }
                     }
-                }
-                XLSX.utils.book_append_sheet(wb, ws1, "지역별 분류");
+                    return ws;
+                };
 
                 // ==========================================
-                // 시트 2: 원본 내역 (수량 있는 업체 전체 리스트)
+                // 시트 1: 제주시 · 신제주
                 // ==========================================
-                const s2Data = [
-                    ["번호", "상호", "대표자", "주소", "전화번호", "국산(포)", "미국산(포)", "지역"]
+                const ws1 = buildRegionSheet(['제주시', '신제주']);
+                XLSX.utils.book_append_sheet(wb, ws1, "제주시·신제주");
+
+                // ==========================================
+                // 시트 2: 서쪽 · 동쪽 · 서귀포 (미분류 포함)
+                // ==========================================
+                const ws2 = buildRegionSheet(['서쪽', '동쪽', '서귀포', '미분류']);
+                XLSX.utils.book_append_sheet(wb, ws2, "서쪽·동쪽·서귀포");
+
+                // ==========================================
+                // 시트 3: 원본 내역 (A열: 지역, B열: 번호, C열: 상호 순)
+                // ==========================================
+                const s3Data = [
+                    ["지역", "번호", "상호", "대표자", "주소", "전화번호", "국산(포)", "미국산(포)"]
                 ];
                 let totalKrAll = 0;
                 let totalUsAll = 0;
@@ -751,56 +768,56 @@
                 recoveredData.forEach(item => {
                     totalKrAll += (Number(item.sacks) || 0);
                     totalUsAll += (Number(item.usSacks) || 0);
-                    s2Data.push([
+                    s3Data.push([
+                        item.region,
                         item.no,
                         item.name,
                         item.rep,
                         item.address,
                         item.phone,
                         item.sacks,
-                        item.usSacks,
-                        item.region
+                        item.usSacks
                     ]);
                 });
 
-                s2Data.push(["", "", "", "", "총합계", totalKrAll, totalUsAll > 0 ? totalUsAll : 0, ""]);
+                s3Data.push(["", "", "", "", "", "총합계", totalKrAll, totalUsAll > 0 ? totalUsAll : 0]);
 
-                const ws2 = XLSX.utils.aoa_to_sheet(s2Data);
-                ws2['!cols'] = [
-                    { wch: 8 },  // 번호
-                    { wch: 24 }, // 상호
-                    { wch: 12 }, // 대표자
-                    { wch: 42 }, // 주소
-                    { wch: 16 }, // 전화번호
-                    { wch: 11 }, // 국산(포)
-                    { wch: 11 }, // 미국산(포)
-                    { wch: 10 }  // 지역
+                const ws3 = XLSX.utils.aoa_to_sheet(s3Data);
+                ws3['!cols'] = [
+                    { wch: 10 }, // A: 지역
+                    { wch: 8 },  // B: 번호
+                    { wch: 24 }, // C: 상호
+                    { wch: 12 }, // D: 대표자
+                    { wch: 42 }, // E: 주소
+                    { wch: 16 }, // F: 전화번호
+                    { wch: 11 }, // G: 국산(포)
+                    { wch: 11 }  // H: 미국산(포)
                 ];
 
-                const range2 = XLSX.utils.decode_range(ws2['!ref']);
-                const lastRow2 = range2.e.r;
-                for (let R = range2.s.r; R <= range2.e.r; ++R) {
-                    for (let C = range2.s.c; C <= range2.e.c; ++C) {
+                const range3 = XLSX.utils.decode_range(ws3['!ref']);
+                const lastRow3 = range3.e.r;
+                for (let R = range3.s.r; R <= range3.e.r; ++R) {
+                    for (let C = range3.s.c; C <= range3.e.c; ++C) {
                         const addr = XLSX.utils.encode_cell({ r: R, c: C });
-                        if (!ws2[addr]) ws2[addr] = { t: 's', v: '' };
+                        if (!ws3[addr]) ws3[addr] = { t: 's', v: '' };
 
                         if (R === 0) {
-                            ws2[addr].s = {
+                            ws3[addr].s = {
                                 font: { name: "맑은 고딕", sz: 11, bold: true, color: { rgb: "FFFFFF" } },
                                 fill: { fgColor: { rgb: "1F3864" } },
                                 alignment: { horizontal: "center", vertical: "center" },
                                 border: borderThin
                             };
-                        } else if (R === lastRow2) {
-                            ws2[addr].s = {
+                        } else if (R === lastRow3) {
+                            ws3[addr].s = {
                                 font: { name: "맑은 고딕", sz: 11, bold: true, color: { rgb: "000000" } },
                                 fill: { fgColor: { rgb: "FFD93B" } },
                                 alignment: { horizontal: "center", vertical: "center" },
                                 border: borderSummary
                             };
                         } else {
-                            const isSackCol = (C === 5 || C === 6);
-                            ws2[addr].s = {
+                            const isSackCol = (C === 6 || C === 7);
+                            ws3[addr].s = {
                                 font: {
                                     name: "맑은 고딕",
                                     sz: 11,
@@ -808,7 +825,7 @@
                                     color: { rgb: isSackCol ? "C00000" : "000000" }
                                 },
                                 alignment: {
-                                    horizontal: C === 3 ? "left" : "center",
+                                    horizontal: C === 4 ? "left" : "center",
                                     vertical: "center"
                                 },
                                 border: borderThin
@@ -816,7 +833,7 @@
                         }
                     }
                 }
-                XLSX.utils.book_append_sheet(wb, ws2, `${itemLabel} 업체별 공급내역`);
+                XLSX.utils.book_append_sheet(wb, ws3, `${itemLabel} 업체별 공급내역`);
 
                 const cleanFileName = docToExport.fileName.replace(/\.[^/.]+$/, "");
                 XLSX.writeFile(wb, `배송분류완료_${cleanFileName}.xlsx`);
