@@ -27,6 +27,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
     <!-- Firebase Compat SDK (안정적인 단일 파일 연동 및 오프라인 캐시 지원) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
     <style>
@@ -134,7 +135,8 @@
 
         function App() {
             const [activeTab, setActiveTab] = useState('upload');
-            const [dbStatus, setDbStatus] = useState('connecting'); // 'connected' | 'local' | 'quota'
+            const [dbStatus, setDbStatus] = useState('connecting'); // 'connected' | 'local' | 'quota' | 'denied'
+            const [dbErrorMsg, setDbErrorMsg] = useState('');
             const dbRef = useRef(null);
 
             // 마스터 데이터 및 내역 (로컬 백업 즉시 로드 후 클라우드 동기화)
@@ -199,24 +201,59 @@
             }, [autoDownloadExcel]);
 
             // ==========================================
-            // 3. Firebase 초기화 및 초절약 동기화 (명단 1문서 통합 저장으로 쓰기 한도 99% 절약)
+            // 3. Firebase 초기화 및 초절약 동기화 (익명 로그인 지원 + 명단 1문서 통합 저장)
             // ==========================================
             useEffect(() => {
                 let unsubMaster = null;
                 let unsubHistory = null;
+                let isMounted = true;
 
-                try {
-                    if (typeof firebase !== 'undefined') {
+                const startCloudSync = async () => {
+                    try {
+                        if (typeof firebase === 'undefined') {
+                            setDbStatus('local');
+                            setDbErrorMsg('Firebase SDK를 불러오지 못했습니다.');
+                            return;
+                        }
+
                         if (!firebase.apps.length) {
                             firebase.initializeApp(FIREBASE_CONFIG);
                         }
+
+                        // 파이어베이스 보안 규칙이 로그인을 요구할 경우를 대비해 익명 로그인 자동 시도
+                        if (firebase.auth) {
+                            try {
+                                await firebase.auth().signInAnonymously();
+                            } catch (authErr) {
+                                console.warn("Anonymous auth skipped:", authErr.code);
+                            }
+                        }
+
+                        if (!isMounted) return;
+
                         const firestore = firebase.firestore();
                         firestore.enablePersistence({ synchronizeTabs: true }).catch(() => {});
                         dbRef.current = firestore;
 
+                        const handleSyncError = (err) => {
+                            console.warn("Firestore sync error:", err);
+                            const code = err && err.code ? err.code : 'unknown';
+                            if (code === 'resource-exhausted') {
+                                setDbStatus('quota');
+                                setDbErrorMsg('오늘 무료 쓰기/읽기 한도(2만 건) 초과. 오후 4~5시 초기화됩니다.');
+                            } else if (code === 'permission-denied') {
+                                setDbStatus('denied');
+                                setDbErrorMsg('파이어베이스 보안 규칙(Rules)에서 접근이 차단되었습니다.');
+                            } else {
+                                setDbStatus('local');
+                                setDbErrorMsg(`연결 오류 (${code}): 오프라인/로컬 모드로 작동 중`);
+                            }
+                        };
+
                         // [핵심 절약 구조] 떡집 명단 전체를 문서 딱 1개('rrb_master/all_shops')로 관리
                         unsubMaster = firestore.collection('rrb_master').doc('all_shops').onSnapshot((docSnap) => {
                             setDbStatus('connected');
+                            setDbErrorMsg('');
                             if (docSnap.exists) {
                                 const d = docSnap.data();
                                 if (d && d.shopsJson) {
@@ -227,14 +264,12 @@
                                     } catch (e) {}
                                 }
                             }
-                        }, (err) => {
-                            console.warn("Master sync warning:", err);
-                            setDbStatus(err.code === 'resource-exhausted' ? 'quota' : 'local');
-                        });
+                        }, handleSyncError);
 
                         // 작업 내역 실시간 동기화 ('rrb_history' 컬렉션)
                         unsubHistory = firestore.collection('rrb_history').onSnapshot((snapshot) => {
                             setDbStatus('connected');
+                            setDbErrorMsg('');
                             const loaded = [];
                             snapshot.forEach(docSnap => {
                                 const d = docSnap.data();
@@ -251,19 +286,18 @@
                             if (loaded.length > 0) {
                                 setSelectedDeliveryDocId(prev => prev || loaded[0].id);
                             }
-                        }, (err) => {
-                            console.warn("History sync warning:", err);
-                            setDbStatus(err.code === 'resource-exhausted' ? 'quota' : 'local');
-                        });
-                    } else {
+                        }, handleSyncError);
+                    } catch (e) {
+                        console.error("Firebase init failed:", e);
                         setDbStatus('local');
+                        setDbErrorMsg(`초기화 오류: ${e.message}`);
                     }
-                } catch (e) {
-                    console.error("Firebase init failed:", e);
-                    setDbStatus('local');
-                }
+                };
+
+                startCloudSync();
 
                 return () => {
+                    isMounted = false;
                     if (unsubMaster) unsubMaster();
                     if (unsubHistory) unsubHistory();
                 };
@@ -1335,16 +1369,26 @@
                                 <span><strong className="text-2xl font-black text-stone-900">B</strong>ean</span>
                             </h1>
                         </div>
-                        <div className={`px-3 py-1.5 rounded-full text-[11px] font-bold flex items-center shadow-sm ${
-                            dbStatus === 'connected' ? 'bg-[#e3ece6] text-[#2c5e43]' :
-                            dbStatus === 'quota' ? 'bg-[#fdf3f2] text-[#9e3b33]' : 'bg-[#f4ebd9] text-[#8a6d3b]'
-                        }`}>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (dbStatus === 'connected') showToast('✅ 파이어베이스 클라우드와 정상 동기화 중입니다!', 'success');
+                                else showToast(dbErrorMsg || '클라우드 연결 대기 중입니다.', 'error');
+                            }}
+                            className={`px-3 py-1.5 rounded-full text-[11px] font-bold flex items-center shadow-sm active:scale-95 transition ${
+                                dbStatus === 'connected' ? 'bg-[#e3ece6] text-[#2c5e43]' :
+                                (dbStatus === 'quota' || dbStatus === 'denied') ? 'bg-[#fdf3f2] text-[#9e3b33]' : 'bg-[#f4ebd9] text-[#8a6d3b]'
+                            }`}
+                        >
                             <span className={`w-2 h-2 rounded-full mr-1.5 ${
                                 dbStatus === 'connected' ? 'bg-[#3b7a57] animate-pulse' :
-                                dbStatus === 'quota' ? 'bg-rose-600' : 'bg-[#b88b4a]'
+                                (dbStatus === 'quota' || dbStatus === 'denied') ? 'bg-rose-600' : 'bg-[#b88b4a]'
                             }`}></span>
-                            {dbStatus === 'connected' ? '클라우드 연결됨' : dbStatus === 'quota' ? '한도초과(로컬)' : '로컬 모드'}
-                        </div>
+                            {dbStatus === 'connected' ? '클라우드 연결됨' :
+                             dbStatus === 'denied' ? '규칙차단(터치)' :
+                             dbStatus === 'quota' ? '한도초과(로컬)' :
+                             dbStatus === 'connecting' ? '연결 중...' : '로컬 모드(터치)'}
+                        </button>
                     </header>
 
                     {/* 메인 컨텐츠 */}
