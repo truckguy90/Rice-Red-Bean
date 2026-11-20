@@ -308,6 +308,7 @@
       'phone': '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>',
       'lock': '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
       'star': '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+      'refresh-cw': '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
       'x': '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'
     };
 
@@ -370,6 +371,8 @@
       const [loginPassword, setLoginPassword] = useState('');
       const [authLoading, setAuthLoading] = useState(false);
       const dbRef = useRef(null);
+      // 클라우드 명단 최초 스냅샷 로드 완료 여부 (로딩 전 빈 명단 덮어쓰기 원천 차단)
+      const masterSyncReadyRef = useRef(false);
 
       const [masterData, setMasterData] = useState(() => {
         try {
@@ -476,6 +479,7 @@
           unsubAuth = firebase.auth().onAuthStateChanged((user) => {
             if (!isMounted) return;
             detachListeners();
+            masterSyncReadyRef.current = false;
             if (!user) {
               dbRef.current = null;
               setAuthUser(null);
@@ -490,6 +494,7 @@
             dbRef.current = firestore;
 
             unsubMaster = firestore.collection('rrb_master').doc('all_shops').onSnapshot((docSnap) => {
+              masterSyncReadyRef.current = true;
               setDbStatus('connected');
               setDbErrorMsg('');
               if (docSnap.exists) {
@@ -562,7 +567,12 @@
         }
       };
 
-      const saveMasterToCloud = async (nextMaster) => {
+      const saveMasterToCloud = async (nextMaster, allowBeforeSync = false) => {
+        // 클라우드 최초 명단 로딩 전에는 덮어쓰기 원천 차단
+        if (dbRef.current && !masterSyncReadyRef.current && !allowBeforeSync) {
+          showToast("클라우드 명단을 불러오는 중입니다. 잠시 후 다시 시도해 주세요.", "error");
+          return { synced: false, reason: 'syncing' };
+        }
         setMasterData(nextMaster);
         const localSaved = writeLocalStorage(LOCAL_MASTER_KEY, JSON.stringify(nextMaster));
         if (!localSaved) showToast("로컬 저장 공간 부족으로 브라우저에 캐시하지 못했습니다.", "error");
@@ -583,20 +593,29 @@
         }
       };
 
-      // 고정 방문업체 지정 / 해제 토글 (명단 1문서 통합 저장)
+      // 고정 방문업체 지정 / 해제 토글 (스마트 매칭 우선으로 약칭 중복 등록 방지)
       const toggleFixedShop = async (shopName, fallbackRow = null) => {
         const cleanName = String(shopName || '').trim();
         if (!cleanName) return;
 
-        const existing = masterData[cleanName];
+        if (dbRef.current && !masterSyncReadyRef.current) {
+          showToast("클라우드 명단 동기화 중입니다. 잠시 후 다시 눌러주세요.", "error");
+          return;
+        }
+
+        const matched = masterData[cleanName]
+          ? { ...masterData[cleanName], name: cleanName }
+          : (fallbackRow ? findSmartMasterInMap(masterData, cleanName, fallbackRow.rep, fallbackRow.phone, fallbackRow.address) : null);
+
+        let targetKey = cleanName;
         let nextEntry;
         let nextFixedState;
 
-        if (existing) {
-          nextFixedState = !Boolean(existing.isFixed);
-          nextEntry = { ...existing, isFixed: nextFixedState };
+        if (matched && masterData[matched.name]) {
+          targetKey = matched.name;
+          nextFixedState = !Boolean(masterData[targetKey].isFixed);
+          nextEntry = { ...masterData[targetKey], isFixed: nextFixedState };
         } else if (fallbackRow) {
-          // 명단에 없는 업체라도 고정업체 지정 시 자동으로 명단에 등록
           nextFixedState = true;
           nextEntry = {
             name: cleanName,
@@ -610,12 +629,67 @@
           return;
         }
 
-        const nextMaster = { ...masterData, [cleanName]: nextEntry };
+        const nextMaster = { ...masterData, [targetKey]: nextEntry };
         const res = await saveMasterToCloud(nextMaster);
+        if (res.reason === 'syncing') return;
         if (res.synced) {
-          showToast(nextFixedState ? `★ '${cleanName}' 고정 방문업체로 지정됨` : `'${cleanName}' 고정 방문업체 해제됨`, "success");
+          showToast(nextFixedState ? `★ '${targetKey}' 고정 방문업체로 지정됨` : `'${targetKey}' 고정 방문업체 해제됨`, "success");
         } else {
-          showToast(nextFixedState ? `★ '${cleanName}' 고정 지정 (로컬 저장)` : `'${cleanName}' 고정 해제 (로컬 저장)`, "info");
+          showToast(nextFixedState ? `★ '${targetKey}' 고정 지정 (로컬 저장)` : `'${targetKey}' 고정 해제 (로컬 저장)`, "info");
+        }
+      };
+
+      // 저장된 작업 내역서(쌀·팥)에서 누락된 하차지 명단 원터치 복구·병합
+      const handleRecoverMasterFromHistory = async () => {
+        if (history.length === 0) {
+          showToast("복구할 작업 내역서가 없습니다.", "error");
+          return;
+        }
+        const merged = { ...masterData };
+        let addedCount = 0;
+
+        // 최신 내역서부터 순회하며 주소·전화번호가 있는 업체를 스마트 중복 체크 후 병합
+        history.forEach(doc => {
+          (doc.data || []).forEach(row => {
+            const name = String(row.name || '').trim();
+            if (!name) return;
+            const existing = findSmartMasterInMap(merged, name, row.rep, row.phone, row.address);
+            if (!existing) {
+              const addr = row.address || '';
+              const region = (row.region && row.region !== '미분류') ? row.region : inferRegionByAddress(addr);
+              merged[name] = {
+                name,
+                rep: row.rep || '',
+                region,
+                address: addr,
+                phone: row.phone || '',
+                isFixed: false
+              };
+              addedCount++;
+            } else {
+              // 기존 항목에 주소/전화번호가 비어있다면 내역서 정보로 보충
+              const cur = merged[existing.name];
+              if (cur && ((!cur.address && row.address) || (!cur.phone && row.phone))) {
+                merged[existing.name] = {
+                  ...cur,
+                  address: cur.address || row.address || '',
+                  phone: cur.phone || row.phone || ''
+                };
+              }
+            }
+          });
+        });
+
+        if (addedCount === 0) {
+          showToast("내역서에 추가로 복구할 누락 업체가 없습니다.", "info");
+          return;
+        }
+
+        const res = await saveMasterToCloud(merged);
+        if (res.synced) {
+          showToast(`작업 내역서에서 누락된 ${addedCount}곳을 복구했습니다! (총 ${Object.keys(merged).length}곳)`, "success");
+        } else if (res.reason !== 'syncing') {
+          showToast(`${addedCount}곳 로컬 복구 완료 (총 ${Object.keys(merged).length}곳)`, "info");
         }
       };
 
@@ -830,7 +904,6 @@
 
           totalKrSacks += sacks;
           totalUsSacks += usSacks;
-          // 고정 방문업체는 업로드 시 자동으로 하차지 선택(selected: true), 하차 완료는 false로 분리 초기화
           parsedList.push({
             no: origNo,
             name: resolved.name,
@@ -937,7 +1010,7 @@
         }
       };
 
-      // [분리 1] 하차지 선택 토글 (전체 선택 표에서 사용 -> 체크한 목록으로 이동)
+      // [분리 1] 하차지 선택 토글
       const toggleDeliverySelect = async (docObj, rowIndex) => {
         if (!docObj) return;
         const updatedData = docObj.data.map((item, idx) => {
@@ -953,7 +1026,7 @@
         await persistDocUpdate({ ...docObj, data: updatedData });
       };
 
-      // [분리 2] 하차 완료 토글 (체크한 목록에서 사용 -> 실제 하차 완료 처리)
+      // [분리 2] 하차 완료 토글
       const toggleDeliveryComplete = async (docObj, rowIndex) => {
         if (!docObj) return;
         const updatedData = docObj.data.map((item, idx) => {
@@ -968,7 +1041,7 @@
         await persistDocUpdate({ ...docObj, data: updatedData });
       };
 
-      // 절반 수량 토글 (하차지 선택 상태로 지정, 하차 완료 여부는 유지)
+      // 절반 수량 토글
       const toggleHalfDelivery = async (docObj, rowIndex) => {
         if (!docObj) return;
         const updatedData = docObj.data.map((item, idx) => {
@@ -1267,6 +1340,7 @@
       };
 
       const notifyMasterSaveResult = (result, successMsg) => {
+        if (result.reason === 'syncing') return;
         if (result.synced) showToast(successMsg, "success");
         else if (result.reason === 'resource-exhausted') showToast("파이어베이스 무료 한도 초과로 로컬에만 임시 저장되었습니다.", "error");
         else if (result.reason === 'permission-denied') showToast("보안 규칙 차단으로 클라우드 저장에 실패해 로컬에만 반영되었습니다.", "error");
@@ -1286,6 +1360,7 @@
           isFixed: Boolean(newCompFixed)
         };
         const res = await saveMasterToCloud({ ...masterData, [name]: newEntry });
+        if (res.reason === 'syncing') return;
         setNewCompName(''); setNewCompRep(''); setNewCompAddress(''); setNewCompPhone(''); setNewCompFixed(false);
         notifyMasterSaveResult(res, `'${name}' 하차지가 저장되었습니다.`);
       };
@@ -1297,7 +1372,7 @@
         notifyMasterSaveResult(res, `'${name}' 하차지가 삭제되었습니다.`);
       };
 
-      // 명단 엑셀 일괄 업로드 (기존 고정 방문업체 isFixed 설정 자동 보존)
+      // 명단 엑셀 일괄 업로드 (기존 고정 방문업체 isFixed 설정을 스마트 매칭으로 100% 승계)
       const handleMasterExcelUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -1340,6 +1415,8 @@
             const newMaster = {};
             const duplicateNames = [];
             let successCount = 0;
+            let preservedFixedCount = 0;
+
             for (let i = headerIdx + 1; i < data.length; i++) {
               const row = data[i];
               if (!row || !row[colMap.name]) continue;
@@ -1350,7 +1427,12 @@
               const phone = colMap.phone !== undefined && row[colMap.phone] ? String(row[colMap.phone]).trim() : "";
               const explicitRegion = colMap.region !== undefined && row[colMap.region] ? String(row[colMap.region]).trim() : "";
               const region = explicitRegion || inferRegionByAddress(address);
-              const prevFixed = Boolean(masterData[name] && masterData[name].isFixed);
+
+              // 약칭으로 저장되어 있던 고정업체도 대표자/전화번호/주소 스마트 매칭으로 찾아 고정 설정 유지
+              const prevMatched = masterData[name] || findSmartMasterInMap(masterData, name, rep, phone, address);
+              const prevFixed = Boolean(prevMatched && prevMatched.isFixed);
+              if (prevFixed) preservedFixedCount++;
+
               if (newMaster[name]) duplicateNames.push(name);
               else successCount++;
               newMaster[name] = { name, rep, region, address, phone, isFixed: prevFixed };
@@ -1362,9 +1444,10 @@
             }
 
             const applyUpload = async () => {
-              const res = await saveMasterToCloud(newMaster);
+              const res = await saveMasterToCloud(newMaster, true);
               const dupMsg = duplicateNames.length > 0 ? ` (중복 상호 ${duplicateNames.length}건: ${duplicateNames.slice(0, 3).join(', ')})` : '';
-              if (res.synced) showToast(`'${targetSheetName}' 기준 ${successCount}곳 명단 동기화 완료 (기존 고정업체 유지)${dupMsg}`, duplicateNames.length > 0 ? "error" : "success");
+              const fixedMsg = preservedFixedCount > 0 ? ` · ★고정 ${preservedFixedCount}곳 유지` : '';
+              if (res.synced) showToast(`'${targetSheetName}' 기준 ${successCount}곳 명단 동기화 완료${fixedMsg}${dupMsg}`, duplicateNames.length > 0 ? "error" : "success");
               else notifyMasterSaveResult(res, '');
             };
 
@@ -1373,7 +1456,7 @@
               const dupNotice = duplicateNames.length > 0 ? `\n엑셀 내 중복 상호 ${duplicateNames.length}건 감지: ${duplicateNames.slice(0, 4).join(', ')}` : '';
               setConfirmDialog({
                 title: '떡집 명단 전체 교체 확인',
-                message: `기존 명단 ${prevCount}곳을 '${targetSheetName}' 시트의 ${successCount}곳으로 전체 교체할까요?\n(기존 지정한 고정 방문업체 설정은 자동 유지됩니다.)${dupNotice}`,
+                message: `기존 명단 ${prevCount}곳을 '${targetSheetName}' 시트의 ${successCount}곳으로 전체 교체할까요?\n(기존 지정한 고정 방문업체 ${preservedFixedCount}곳은 자동 유지됩니다.)${dupNotice}`,
                 confirmText: '교체하기',
                 danger: false,
                 onConfirm: applyUpload
@@ -1453,7 +1536,6 @@
             return [name, info.rep, info.region, info.address, info.phone].join(' ').toLowerCase().includes(q);
           })
           .sort((a, b) => {
-            // 고정 방문업체 우선 정렬 후 가나다순
             if (Boolean(b[1].isFixed) !== Boolean(a[1].isFixed)) return b[1].isFixed ? 1 : -1;
             return a[0].localeCompare(b[0], 'ko-KR');
           });
@@ -1762,7 +1844,6 @@
                       ))}
                     </div>
 
-                    {/* 고정 방문업체 원터치 불러오기 */}
                     {activeDoc && (
                       <button
                         type="button"
@@ -1774,7 +1855,6 @@
                       </button>
                     )}
 
-                    {/* 현재 탭 모드에 맞는 일괄 제어 버튼 */}
                     {activeDoc && deliveryViewMode === 'table' && filteredRows.length > 0 && (
                       <div className="flex gap-2">
                         <button onClick={() => setBulkDeliverySelect(activeDoc, targetIndices, true)} className="flex-1 bg-[#f4eee4] text-stone-800 py-2 rounded-xl text-xs font-extrabold flex items-center justify-center active:scale-95 transition"><Icon name="check-square" size={14} className="mr-1 text-amber-700" />[{activeRegionFilter}] 전체 선택</button>
@@ -1790,7 +1870,6 @@
                     )}
                   </div>
 
-                  {/* 상단 요약 카드: 선택한 내 하차지 vs 실제 하차 완료 분리 표시 */}
                   {activeDoc && (
                     <div className="bg-stone-800 text-[#fdfbf7] p-4 rounded-[24px] shadow-md space-y-2.5">
                       <div className="grid grid-cols-2 gap-3">
@@ -1817,7 +1896,6 @@
                     </div>
                   )}
 
-                  {/* 2단계 탭 전환: 1단계 하차지 선택 표 <-> 2단계 체크한 목록(하차 완료 체크) */}
                   {activeDoc && (
                     <div className="grid grid-cols-2 gap-1.5 bg-[#e6dfd5] p-1 rounded-2xl">
                       <button onClick={() => setDeliveryViewMode('table')} className={`py-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center transition ${deliveryViewMode === 'table' ? 'bg-[#fffdfa] text-stone-800 shadow-sm' : 'text-stone-500'}`}>
@@ -1829,7 +1907,6 @@
                     </div>
                   )}
 
-                  {/* 1단계: 전체 선택 표 (하차지 선택 + 고정업체 별표 + 절반 지정) */}
                   {activeDoc && deliveryViewMode === 'table' && (
                     <div className="bg-[#fffdfa] rounded-[24px] shadow-sm border border-[#e6dfd5] overflow-hidden">
                       <table className="w-full text-left border-collapse">
@@ -1906,7 +1983,6 @@
                     </div>
                   )}
 
-                  {/* 2단계: 체크한 목록만 (선택된 내 하차지 리스트 -> 여기서 하차 완료 체크) */}
                   {activeDoc && deliveryViewMode === 'checked_list' && (
                     <div className="space-y-2.5">
                       {selectedFilteredRows.length === 0 ? (
@@ -1949,7 +2025,6 @@
                               </div>
                             </div>
 
-                            {/* 메인 액션: 하차 완료 체크 버튼 */}
                             <button
                               type="button"
                               onClick={() => toggleDeliveryComplete(activeDoc, row.origIdx)}
@@ -2074,13 +2149,25 @@
 
             {activeTab === 'regions' && (
               <div className="space-y-4">
-                <div className="bg-[#eef5f0] p-4 rounded-[24px] shadow-sm border border-[#cde0d3]">
-                  <h3 className="text-xs font-extrabold text-[#2c5e43] mb-1 flex items-center"><Icon name="file-spreadsheet" size={16} className="mr-1.5" />떡집명단 엑셀 일괄 동기화 (1회 저장)</h3>
-                  <p className="text-[11px] text-[#457359] mb-3 leading-relaxed"><b>떡집명단_최종.xlsx</b> 파일을 올리시면 모든 명단을 문서 1개에 압축 저장합니다. (기존 고정 방문업체 설정 자동 유지)</p>
+                <div className="bg-[#eef5f0] p-4 rounded-[24px] shadow-sm border border-[#cde0d3] space-y-2.5">
+                  <div>
+                    <h3 className="text-xs font-extrabold text-[#2c5e43] mb-1 flex items-center"><Icon name="file-spreadsheet" size={16} className="mr-1.5" />떡집명단 엑셀 일괄 동기화 (1회 저장)</h3>
+                    <p className="text-[11px] text-[#457359] leading-relaxed"><b>떡집명단_최종.xlsx</b> 파일을 올리시면 전체 명단이 복구·동기화됩니다. (기존 지정한 <b>★고정 방문업체</b>는 약칭이어도 자동 유지)</p>
+                  </div>
                   <label className="block w-full bg-[#3b6e52] hover:bg-[#2f5942] text-white text-center font-bold py-2.5 rounded-xl text-xs cursor-pointer transition active:scale-95 shadow-sm">
                     떡집명단 엑셀 파일 올리기
                     <input type="file" accept=".xlsx, .xls, .csv" onChange={handleMasterExcelUpload} className="hidden" />
                   </label>
+                  {history.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleRecoverMasterFromHistory}
+                      className="w-full bg-white hover:bg-[#f7faf8] text-[#2c5e43] border border-[#b7d6c3] font-extrabold py-2 rounded-xl text-[11px] flex items-center justify-center active:scale-95 transition"
+                    >
+                      <Icon name="refresh-cw" size={13} className="mr-1.5" />
+                      저장된 쌀·팥 내역서에서 누락 업체 불러와 복구하기
+                    </button>
+                  )}
                 </div>
 
                 <div className="bg-[#fffdfa] p-4 rounded-[24px] shadow-sm border border-[#e6dfd5]">
